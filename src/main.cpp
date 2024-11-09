@@ -6,10 +6,10 @@
 #include "OrbDockComms.h"
 
 // OrbDockBasic orbDock{};
-//OrbDockConfigurizer orbDock{};
+OrbDockConfigurizer orbDock{};
 //OrbDockCasino orbDock{};
 //OrbDockLedStrip orbDock{};
-OrbDockComms orbDock(10, 11, 12);
+//OrbDockComms orbDock(10, 11, 12);
 
 void setup() {
     Serial.begin(115200);

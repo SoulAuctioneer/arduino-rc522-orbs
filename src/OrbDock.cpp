@@ -158,17 +158,25 @@ int OrbDock::isOrb() {
 void OrbDock::printOrbInfo() {
     Serial.println(F("\n*************************************************"));
     Serial.print(F("Trait: "));
-    Serial.print(getTraitName());
-    Serial.print(F(" Energy: "));
+    Serial.println(getTraitName());
+    Serial.print(F("Energy: "));
     Serial.println(orbInfo.energy);
     
+    Serial.print(F("Visited:     "));
     for (int i = 0; i < NUM_STATIONS; i++) {
-        Serial.print(STATION_NAMES[i]);
-        Serial.print(F(": Visited:"));
-        Serial.print(orbInfo.stations[i].visited ? "Yes" : "No");
-        Serial.print(F(" | "));
+        if (orbInfo.stations[i].visited) {
+            Serial.print(STATION_NAMES[i]);
+            Serial.print(F(" | "));
+        }
     }
-    
+    Serial.println();
+    Serial.print(F("Not visited: "));
+    for (int i = 0; i < NUM_STATIONS; i++) {
+        if (!orbInfo.stations[i].visited) {
+            Serial.print(STATION_NAMES[i]);
+            Serial.print(F(" | "));
+        }
+    }
     Serial.println();
     Serial.println(F("*************************************************"));
     Serial.println();
@@ -263,7 +271,14 @@ void OrbDock::printNFCStorage() {
 
 // Returns the trait name
 const char* OrbDock::getTraitName() {
-    return TRAIT_NAMES[static_cast<int>(orbInfo.trait)];
+    int traitIndex = static_cast<int>(orbInfo.trait);
+    if (traitIndex < 0 || static_cast<size_t>(traitIndex) >= sizeof(TRAIT_NAMES)/sizeof(TRAIT_NAMES[0])) {
+        Serial.print(F("ERROR: Invalid trait detected: "));
+        Serial.println(static_cast<int>(orbInfo.trait));
+        setLEDPattern(LED_PATTERN_ERROR);
+        return nullptr;
+    }
+    return TRAIT_NAMES[traitIndex];
 }
 
 // Writes the trait to the orb
@@ -463,6 +478,10 @@ void OrbDock::runLEDPatterns() {
             }
             case LED_PATTERN_FLASH: {
                 led_flash();
+                break;
+            }
+            case LED_PATTERN_ERROR: {
+                led_error();
                 break;
             }
             default:
