@@ -36,11 +36,10 @@ For each station: Visited yes/no, and Energy 0-255
   6 - Init/reset station
 
 TODO:
-- Communicate with external microcontroller
-- Slerp comms
-- Allow gambling in Casino with all energy, not just station's energy
+- Communicate with external microcontroller - CHARLIE
+- Slerp comms - CAN USE CHARLIE'S CODE
 - Jungle station
-- Alchemization station
-- Thought distiller station
-- Control console station
-- Retoxify station
+- Alchemization station - CHARLIE
+- Thought distiller station - LUCA
+- Control console station - CAN USE CHARLIE'S CODE
+- Retoxify station - DIANE
