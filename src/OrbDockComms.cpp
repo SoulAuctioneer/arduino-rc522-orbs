@@ -37,7 +37,7 @@ void OrbDockComms::loop() {
 void OrbDockComms::onOrbConnected() {
     OrbDock::onOrbConnected();
     digitalWrite(_orbPresentPin, HIGH);
-    analogWrite(_energyLevelPin, getEnergy());
+    analogWrite(_energyLevelPin, orbInfo.energy);
     analogWrite(_toxicTraitPin, static_cast<int>(orbInfo.trait));
     // analogWrite(_energyLevelPin, 90);
     // analogWrite(_toxicTraitPin, 4);

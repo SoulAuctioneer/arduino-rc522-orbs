@@ -110,7 +110,8 @@ struct Station {
 enum LEDPatternId {
     LED_PATTERN_NO_ORB,
     LED_PATTERN_ORB_CONNECTED,
-    LED_PATTERN_FLASH
+    LED_PATTERN_FLASH,
+    LED_PATTERN_ERROR
 };
 
 struct LEDPatternConfig {
@@ -138,6 +139,12 @@ const LEDPatternConfig LED_PATTERNS[] = {
         .brightness = 255,
         .interval = 10,
         .brightnessInterval = 5.0f
+    },
+    {
+        .id = LED_PATTERN_ERROR,
+        .brightness = 255,
+        .interval = 5,
+        .brightnessInterval = 5.0f,
     }
 };
 
