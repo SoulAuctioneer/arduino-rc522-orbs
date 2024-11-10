@@ -74,7 +74,7 @@ const char* const TRAIT_NAMES[] = {
 const uint32_t TRAIT_COLORS[] = {
     0xFF0000,  // None
     0xFF2800,  // Orange for RUMINATE (Rumination)
-    0xFF4600,  // Yellow for SHAME (Shame Spiral)
+    0xFF6000,  // Yellow for SHAME (Shame Spiral)
     0x20FF00,  // Green for DOUBT (Self Doubt)
     0xFF00D2,  // Pink/Magenta for DISCONTENT (Discontentment)
     0x1400FF   // Blue for HOPELESS (Hopelessness)
