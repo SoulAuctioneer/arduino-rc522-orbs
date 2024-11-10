@@ -128,6 +128,7 @@ protected:
     }
 
     void onUnformattedNFC() override {
+        Serial.println(F("Unformatted NFC, will format with selected trait."));
         formatNFC(selectedTrait);
     }
 };
