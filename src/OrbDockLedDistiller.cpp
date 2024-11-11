@@ -35,6 +35,10 @@ private:
     CRGB leds[NUM_LEDS];
     bool showPrideEffect = true;
     CRGB color = CRGB::Black;
+    uint16_t sLastMillis = 0;
+    bool inTransition = false;
+    uint32_t transitionStartTime = 0;
+    const uint32_t TRANSITION_DURATION = 6000; // 6 seconds
 
 public:
     OrbDockLedDistiller() : OrbDock(StationId::DISTILLER) {
@@ -57,6 +61,7 @@ public:
             pride2015(leds, NUM_LEDS);
             FastLED.show();
         }else{
+            // strobeWhiteToColorTransition(color, leds, NUM_LEDS);
             flickerFlame(color);
             //lightShow(color);
             FastLED.show();
@@ -78,11 +83,14 @@ protected:
 
         // Set color using RGB values
         color = CRGB(r, g, b);
-        
+
+        inTransition = true;
     }
 
     void onOrbDisconnected() override {
         Serial.println(F("Orb disconnected"));
+        transitionStartTime = 0;
+        inTransition = false;
         showPrideEffect = true;
     }
 
@@ -180,24 +188,69 @@ protected:
         }
     }
 
+    
     // Creates a flickering flame effect using the given base color
     void flickerFlame(CRGB baseColor) {
-        // Track timing between updates
+        // Track timing between updates and transition state
         static uint16_t sLastMillis = 0;
+        
         uint16_t ms = millis();
         uint16_t deltams = ms - sLastMillis;
 
-        if (deltams >= 150) { // Update flame effect every 150ms
+        // Start transition if we haven't yet
+        if (inTransition && transitionStartTime == 0) {
+            transitionStartTime = ms;
+            fill_solid(leds, NUM_LEDS, CRGB::Black);
+        }
+
+        // Handle transition phase
+        if (inTransition) {
+            uint32_t elapsed = ms - transitionStartTime;
+            
+            if (elapsed >= TRANSITION_DURATION) {
+                // Transition complete, switch to normal flame effect
+                inTransition = false;
+                transitionStartTime = 0;
+            } else {
+                // Calculate how many sparkles based on transition progress
+                float progress = float(elapsed) / TRANSITION_DURATION;
+                int numSparkles = int(NUM_LEDS * progress * 0.5); // Max 50% of LEDs can sparkle at once
+                
+                // Clear previous frame
+                fadeToBlackBy(leds, NUM_LEDS, 200);
+                
+                // Add random white sparkles with brightness capped at MAX_BRIGHTNESS
+                for (int i = 0; i < numSparkles; i++) {
+                    int pos = random16(NUM_LEDS);
+                    if (random8() < 180) { // 70% chance of sparkle
+                        // Create white sparkle scaled to MAX_BRIGHTNESS
+                        leds[pos] = CRGB(MAX_BRIGHTNESS, MAX_BRIGHTNESS, MAX_BRIGHTNESS);
+                        // Apply random fade while maintaining relative color ratios
+                        uint8_t fade = random8(50, 150);
+                        leds[pos].fadeToBlackBy(fade);
+                    }
+                }
+                
+                // Gradually blend in base color
+                if (progress > 0.7) { // Start color blend in last 30% of transition
+                    float colorBlend = (progress - 0.7) / 0.3; // 0 to 1 over last 30%
+                    for (int i = 0; i < NUM_LEDS; i++) {
+                        leds[i] = blend(leds[i], baseColor, colorBlend * 255);
+                    }
+                }
+            }
+            FastLED.show();
+            return;
+        }
+
+        // Normal flame effect (existing code)
+        if (deltams >= 150) {
             sLastMillis = ms;
             
             for (int i = 0; i < NUM_LEDS; i++) {
-                // Generate random brightness value for this LED
                 int flicker = random(MIN_BRIGHTNESS, MAX_BRIGHTNESS);
-                
-                // Start with base color and apply flickering effects
                 leds[i] = baseColor;
-                leds[i].fadeToBlackBy(random(0, 40));  // Randomly dim some LEDs
-                leds[i].r = (leds[i].r * flicker) / 255;  // Apply random brightness to each color channel
+                leds[i].r = (leds[i].r * flicker) / 255;
                 leds[i].g = (leds[i].g * flicker) / 255;
                 leds[i].b = (leds[i].b * flicker) / 255;
             }
