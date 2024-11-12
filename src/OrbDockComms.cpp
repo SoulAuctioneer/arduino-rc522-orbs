@@ -2,8 +2,8 @@
 #include <Arduino.h>
 
 uint8_t scaleTraitValue(uint8_t traitValue) {
-    // Scale from 0-5 to 0-255
-    return (traitValue * 255) / 5;
+    // Scale from 0-4 to 0-255
+    return (traitValue * 255) / 4;
 }
 
 OrbDockComms::OrbDockComms(uint8_t orbPresentPin, uint8_t energyLevelPin, uint8_t toxicTraitPin, uint8_t clearEnergyPin)
@@ -49,6 +49,7 @@ void OrbDockComms::onOrbConnected() {
     digitalWrite(_orbPresentPin, HIGH);
     analogWrite(_energyLevelPin, orbInfo.energy);
     analogWrite(_toxicTraitPin, scaleTraitValue(static_cast<int>(orbInfo.trait)));
+
     // analogWrite(_energyLevelPin, 90);
     // analogWrite(_toxicTraitPin, 4);
     // Serial.print(F("Orb Comms sending: Orb Present = HIGH, Energy = "));
