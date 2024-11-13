@@ -111,7 +111,8 @@ enum LEDPatternId {
     LED_PATTERN_NO_ORB,
     LED_PATTERN_ORB_CONNECTED,
     LED_PATTERN_FLASH,
-    LED_PATTERN_ERROR
+    LED_PATTERN_ERROR,
+    LED_PATTERN_NO_ENERGY
 };
 
 struct LEDPatternConfig {
@@ -145,6 +146,12 @@ const LEDPatternConfig LED_PATTERNS[] = {
         .brightness = 255,
         .interval = 5,
         .brightnessInterval = 5.0f,
+    },
+    {
+        .id = LED_PATTERN_NO_ENERGY,
+        .brightness = 100,
+        .interval = 200,
+        .brightnessInterval = 10.0f
     }
 };
 
@@ -227,6 +234,7 @@ private:
     void led_trait_chase();
     void led_flash();
     void led_error();
+    void led_no_energy();
     uint32_t dimColor(uint32_t color, uint8_t intensity);
     float lerp(float start, float end, float t);
 
