@@ -410,7 +410,6 @@ int OrbDock::readOrbInfo() {
         }
         orbInfo.stations[i].visited = page_buffer[0] == 1;
         orbInfo.stations[i].custom = page_buffer[1];
-        
     }
 
     // Read trait
@@ -419,6 +418,13 @@ int OrbDock::readOrbInfo() {
         return STATUS_FAILED;
     }
     orbInfo.trait = static_cast<TraitId>(page_buffer[0]);
+
+    // Read energy
+    if (readPage(ENERGY_PAGE) == STATUS_FAILED) {
+        Serial.println(F("Failed to read energy"));
+        return STATUS_FAILED;
+    }
+    orbInfo.energy = page_buffer[0];
 
     printOrbInfo();
     return STATUS_SUCCEEDED;

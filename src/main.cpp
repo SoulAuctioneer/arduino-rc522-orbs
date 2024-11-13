@@ -8,11 +8,11 @@
 #include <FastLED.h>
 
 
-OrbDockBasic orbDock{};
+// OrbDockBasic orbDock{};
 //OrbDockConfigurizer orbDock{};
 //OrbDockCasino orbDock{};
 //OrbDockLedStrip orbDock{};
-//OrbDockComms orbDock(10, 11, 12);
+OrbDockComms orbDock(10, 11, 9, 13);
 //OrbDockLedDistiller orbDock{};
 
 void setup() {
