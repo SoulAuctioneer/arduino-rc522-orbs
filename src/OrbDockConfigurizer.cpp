@@ -77,6 +77,8 @@ public:
         OrbDock::loop();
 
         // Handle button inputs
+
+        // Next trait
         if (display.isButton1Pressed()) {
             int trait = static_cast<int>(selectedTrait) + 1;
             if (trait >= NUM_TRAITS) trait = 0;
@@ -86,7 +88,8 @@ public:
             delay(200); // Simple debounce
             updateDisplay();
         }
-        
+
+        // Previous trait
         if (display.isButton2Pressed()) {
             int trait = static_cast<int>(selectedTrait) - 1;
             if (trait < 0) trait = NUM_TRAITS - 1;
@@ -97,16 +100,18 @@ public:
             updateDisplay();
         }
 
+        // Format orb
         if (display.isButton3Pressed() && isOrbConnected) {
-            Serial.println(F("Reset orb"));
-            resetOrb();
+            Serial.println(F("Format orb"));
+            formatNFC(selectedTrait);
             delay(200);
             updateDisplay();
         }
 
+        // Reset orb
         if (display.isButton4Pressed() && isNFCConnected) {
-            Serial.println(F("Format orb"));
-            formatNFC(selectedTrait);
+            Serial.println(F("Reset orb"));
+            resetOrb();
             delay(200);
             updateDisplay();
         }
