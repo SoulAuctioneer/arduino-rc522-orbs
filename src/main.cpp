@@ -2,10 +2,9 @@
 #include "OrbDockConfigurizer.cpp"
 #include "OrbDockBasic.cpp"
 #include "OrbDockCasino.cpp"
-//#include "OrbDockLedStrip.cpp"
 #include "OrbDockComms.h"
 #include "OrbDockLedDistiller.cpp"
-#include <FastLED.h>
+//#include "OrbDockLedStrip.cpp"
 
 
 OrbDockBasic orbDock{};
