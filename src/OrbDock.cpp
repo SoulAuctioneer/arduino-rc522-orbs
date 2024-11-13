@@ -81,28 +81,30 @@ void OrbDock::loop() {
     }
     lastNFCCheckTime = currentMillis;
 
-    // While orb is connected, check if it's still connected
-    if (isNFCConnected && isOrbConnected) {
-        if (!isNFCActive()) {
-            // Orb has disconnected
+    // First, check if previously connected NFC is still present
+    if (isNFCConnected) {
+        if (!isNFCPresent()) {
+            // NFC has been removed, reset all states
             endOrbSession();
+            return;
         }
-        return;
     }
 
-    // Check for NFC presence
-    if(isNFCPresent()) {
+    // Check for new NFC presence
+    if(!isNFCConnected && isNFCPresent()) {
         isNFCConnected = true;
         // NFC is present! Check if it's an orb
         int orbStatus = isOrb();
         switch (orbStatus) {
             case STATUS_FAILED:
                 handleError("Failed to check orb header");
+                endOrbSession();
                 return;
             case STATUS_FALSE:
                 if (!isUnformattedNFC) {
                     Serial.println(F("Unformatted NFC connected"));
                     isUnformattedNFC = true;
+                    setLEDPattern(LED_PATTERN_ERROR);
                     onUnformattedNFC();
                 }
                 break;
@@ -353,23 +355,38 @@ void OrbDock::handleError(const char* message) {
 // Formats the NFC with "ORBS" header, default station information and given trait
 int OrbDock::formatNFC(TraitId trait) {
     Serial.println(F("Formatting NFC with ORBS header, default station information and given trait..."));
+    
+    // Store the trait we want to set
+    orbInfo.trait = trait;
+    
     // Write header
     memcpy(page_buffer, ORBS_HEADER, 4);
     if (writePage(ORBS_PAGE, page_buffer) == STATUS_FAILED) {
         return STATUS_FAILED;
     }
-    // Write default stations
-    if (resetOrb() == STATUS_FAILED) {
-        return STATUS_FAILED;
-    }
-    // Write trait
+    
+    // Write trait first
     if (setTrait(trait) == STATUS_FAILED) {
         return STATUS_FAILED;
     }
+    
+    // Then reset stations
+    if (resetOrb() == STATUS_FAILED) {
+        return STATUS_FAILED;
+    }
+    
+    // Write trait again to ensure it wasn't cleared
+    if (setTrait(trait) == STATUS_FAILED) {
+        return STATUS_FAILED;
+    }
+    
     // Write energy
     if (setEnergy(INIT_ENERGY) == STATUS_FAILED) {
         return STATUS_FAILED;
     }
+    
+    setLEDPattern(LED_PATTERN_ORB_CONNECTED);
+
     return STATUS_SUCCEEDED;
 }
 
@@ -410,7 +427,6 @@ int OrbDock::readOrbInfo() {
         }
         orbInfo.stations[i].visited = page_buffer[0] == 1;
         orbInfo.stations[i].custom = page_buffer[1];
-        
     }
 
     // Read trait
@@ -419,6 +435,13 @@ int OrbDock::readOrbInfo() {
         return STATUS_FAILED;
     }
     orbInfo.trait = static_cast<TraitId>(page_buffer[0]);
+
+    // Read energy
+    if (readPage(ENERGY_PAGE) == STATUS_FAILED) {
+        Serial.println(F("Failed to read energy"));
+        return STATUS_FAILED;
+    }
+    orbInfo.energy = page_buffer[0];
 
     printOrbInfo();
     return STATUS_SUCCEEDED;
@@ -453,15 +476,27 @@ void OrbDock::setLEDPattern(LEDPatternId patternId) {
 void OrbDock::runLEDPatterns() {
     static unsigned long ledPreviousMillis;
     static uint8_t ledBrightness;
-    //static unsigned long ledBrightnessPreviousMillis;
     static unsigned int ledPatternInterval;
+    static LEDPatternId lastPatternId = LED_PATTERN_NO_ORB;
+    static byte lastEnergy = 0;  // Add this to track energy changes
+    const uint8_t MIN_INTERVAL = 10;
+    const uint8_t MAX_INTERVAL = 120;
 
-    // If the LED pattern is orb_connected, set the LED speed based on energy level
-    if (ledPatternConfig.id == LED_PATTERN_ORB_CONNECTED) {
-        ledPatternInterval = map(MAX_ENERGY - orbInfo.energy, 0, MAX_ENERGY, 20, 100);
-    }
-    else {
-        ledPatternInterval = ledPatternConfig.interval;
+    // Update the interval when pattern changes or energy changes (for ORB_CONNECTED pattern)
+    if (lastPatternId != ledPatternConfig.id || 
+        (ledPatternConfig.id == LED_PATTERN_ORB_CONNECTED && lastEnergy != orbInfo.energy)) {
+        
+        lastPatternId = ledPatternConfig.id;
+        lastEnergy = orbInfo.energy;
+        
+        if (ledPatternConfig.id == LED_PATTERN_ORB_CONNECTED) {
+            ledPatternInterval = constrain(
+                map(orbInfo.energy, 0, ALCHEMIZATION_ENERGY, MAX_INTERVAL, MIN_INTERVAL),
+                MIN_INTERVAL, MAX_INTERVAL
+            );
+        } else {
+            ledPatternInterval = ledPatternConfig.interval;
+        }
     }
 
     if (currentMillis - ledPreviousMillis >= ledPatternInterval) {
@@ -473,7 +508,11 @@ void OrbDock::runLEDPatterns() {
                 break;
             }
             case LED_PATTERN_ORB_CONNECTED: {
-                led_trait_chase();
+                if (orbInfo.energy == 0) {
+                    led_no_energy();
+                } else {
+                    led_trait_chase();
+                }
                 break;
             }
             case LED_PATTERN_FLASH: {
@@ -523,16 +562,38 @@ void OrbDock::led_trait_chase() {
     static uint8_t intensity = 255;
     static uint8_t globalIntensity = 0;
     static int8_t globalDirection = 1;
-    
+    static uint16_t hueOffset = 0;
+    static int8_t hueDirection = 1;
+    const uint16_t HUE_RANGE = 100; // Maximum hue shift in either direction
+    const uint8_t MIN_INTENSITY = 30;
+
     // Update global intensity
     globalIntensity += globalDirection * 9;  // Adjust 2 to change global fade speed
-    if (globalIntensity >= 255 || globalIntensity <= 30) {
+    if (globalIntensity >= 255 || globalIntensity <= MIN_INTENSITY) {
         globalDirection *= -1;
-        globalIntensity = constrain(globalIntensity, 30, 255);
+        globalIntensity = constrain(globalIntensity, MIN_INTENSITY, 255);
     }
 
-    // Find the trait color
-    uint32_t traitColor = TRAIT_COLORS[static_cast<int>(orbInfo.trait)];
+    // Update hue offset
+    hueOffset += hueDirection;
+    if (hueOffset >= HUE_RANGE || hueOffset <= 0) {
+        hueDirection *= -1;
+        hueOffset = constrain(hueOffset, 0, HUE_RANGE);
+    }
+
+    // Find the trait color and apply hue shift
+    uint32_t baseColor = TRAIT_COLORS[static_cast<int>(orbInfo.trait)];
+    uint8_t r = (uint8_t)(baseColor >> 16);
+    uint8_t g = (uint8_t)(baseColor >> 8);
+    uint8_t b = (uint8_t)baseColor;
+    
+    // Simple hue shift by adjusting RGB values
+    float shift = (float)hueOffset / HUE_RANGE * 0.2; // Scale down shift effect
+    uint32_t traitColor = strip.Color(
+        constrain(r * (1 + shift), 0, 255),
+        constrain(g * (1 + shift), 0, 255),
+        constrain(b * (1 + shift), 0, 255)
+    );
 
     // Calculate opposite pixel position
     uint16_t oppositePixel = (currentPixel + (NEOPIXEL_COUNT / 2)) % NEOPIXEL_COUNT;
@@ -616,6 +677,23 @@ void OrbDock::led_flash() {
         );
 
         strip.setPixelColor(i, dimColor(shiftedColor, intensity));
+    }
+}
+
+void OrbDock::led_no_energy() {
+    static uint8_t intensity = 0;
+    static int8_t direction = 1;
+    
+    // Slowly pulse intensity up and down
+    intensity += direction;
+    if (intensity >= 255 || intensity <= 0) {
+        direction *= -1;
+        intensity = constrain(intensity, 0, 255); 
+    }
+
+    // Set all pixels to dimmed red
+    for(int i = 0; i < NEOPIXEL_COUNT; i++) {
+        strip.setPixelColor(i, strip.Color(intensity, 0, 0));
     }
 }
 
