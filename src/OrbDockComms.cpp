@@ -13,14 +13,15 @@ OrbDockComms::OrbDockComms(uint8_t orbPresentPin, uint8_t energyLevelPin, uint8_
 void OrbDockComms::begin() {
     OrbDock::begin();
     
-    // Configure input pin with pull-up
-    pinMode(_clearEnergyPin, INPUT_PULLUP);
+    // Configure input pin with pull-down (default LOW)
+    pinMode(_clearEnergyPin, INPUT);
     
     // Configure output pins and set their initial states
     pinMode(_orbPresentPin, OUTPUT);
     pinMode(_energyLevelPin, OUTPUT);
     pinMode(_toxicTraitPin, OUTPUT);
     
+    digitalWrite(_clearEnergyPin, LOW);  // switch on pull down
     digitalWrite(_orbPresentPin, LOW);
     analogWrite(_energyLevelPin, 0);
     analogWrite(_toxicTraitPin, 0);
@@ -29,7 +30,7 @@ void OrbDockComms::begin() {
 void OrbDockComms::loop() {
     OrbDock::loop();
 
-    if (digitalRead(_clearEnergyPin) == LOW && isOrbConnected) {
+    if (digitalRead(_clearEnergyPin) == HIGH && isOrbConnected) {
         Serial.println(F("Orb Comms clearing energy"));
         setEnergy(0);
     }
@@ -40,6 +41,11 @@ void OrbDockComms::onOrbConnected() {
     digitalWrite(_orbPresentPin, HIGH);
     analogWrite(_energyLevelPin, orbInfo.energy);
     analogWrite(_toxicTraitPin, traitToInt(orbInfo.trait));
+    // Serial.println(F("Orb Comms orb connected"));
+    // Serial.print(F("Energy: "));
+    // Serial.println(orbInfo.energy);
+    // Serial.print(F("Toxic Trait: "));
+    // Serial.println(TRAIT_NAMES[orbInfo.trait]);
 }
 
 void OrbDockComms::onOrbDisconnected() {
@@ -47,6 +53,7 @@ void OrbDockComms::onOrbDisconnected() {
     digitalWrite(_orbPresentPin, LOW);
     analogWrite(_energyLevelPin, 0);
     analogWrite(_toxicTraitPin, 0);
+    Serial.println(F("Orb Comms orb disconnected"));
 }
 
 void OrbDockComms::onEnergyLevelChanged(byte newEnergy) {
@@ -59,6 +66,11 @@ void OrbDockComms::onError(const char* errorMessage) {
 
 void OrbDockComms::onUnformattedNFC() {
     OrbDock::onUnformattedNFC();
+    Serial.println(F("Unformatted NFC, formatting to trait NONE / energy 42."));
+    formatNFC(NONE);
+    setEnergy(42);
+
+    onOrbConnected();
 }
 
 uint8_t OrbDockComms::traitToInt(TraitId trait) {
