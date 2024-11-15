@@ -486,7 +486,7 @@ void OrbDock::runLEDPatterns() {
     if (lastPatternId != ledPatternConfig.id || 
         (ledPatternConfig.id == LED_PATTERN_ORB_CONNECTED && lastEnergy != orbInfo.energy)) {
         
-        lastPatternId = ledPatternConfig.id;
+        lastPatternId = static_cast<LEDPatternId>(ledPatternConfig.id);
         lastEnergy = orbInfo.energy;
         
         if (ledPatternConfig.id == LED_PATTERN_ORB_CONNECTED) {
