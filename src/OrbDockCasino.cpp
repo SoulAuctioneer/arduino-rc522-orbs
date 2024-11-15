@@ -90,6 +90,10 @@ public:
 
 protected:
     void onOrbConnected() override {
+        // Add energy if station hasn't been visited
+        if (!getCurrentStationInfo().visited) {
+            addEnergy(10);
+        }
         updateDisplay();
     }
 

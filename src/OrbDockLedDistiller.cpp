@@ -73,6 +73,11 @@ protected:
         Serial.println(F("OrbDockLedDistiller Connected"));
         showPrideEffect = false;
 
+        // Add energy if this station hasn't been visited yet
+        if (!getCurrentStationInfo().visited) {
+            addEnergy(10);
+        }
+
         // Get trait color from TRAIT_COLORS array using orbInfo.trait as index
         uint32_t traitColor = TRAIT_COLORS[static_cast<int>(orbInfo.trait)];
         
