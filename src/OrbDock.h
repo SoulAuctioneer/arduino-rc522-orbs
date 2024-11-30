@@ -5,27 +5,8 @@
 #include <SPI.h>
 #include <Adafruit_PN532.h>
 #include <Adafruit_NeoPixel.h>
-
-// NeoPixel pin 
-#define NEOPIXEL_PIN (6)
-
-// PN532 pins - latest design
-#define PN532_SCK   (5)
-#define PN532_MISO  (4)
-#define PN532_MOSI  (3)
-#define PN532_SS    (2)
-
-// V2 PN532 pins - for later dock designs
-#define PN532_SCK2  (2)
-#define PN532_MISO2 (3)
-#define PN532_MOSI2 (4)
-#define PN532_SS2   (5)
-
-// V1 PN532 pins - for early dock designs
-#define PN532_SCK1  (2)
-#define PN532_MISO1 (5)
-#define PN532_MOSI1 (3)
-#define PN532_SS1   (4)
+#include "NFCReader.h"
+#include "LEDRing.h"
 
 // Status constants
 #define STATUS_FAILED    0
@@ -47,9 +28,6 @@
 #define ENERGY_PAGE (PAGE_OFFSET + 2)
 #define STATIONS_PAGE_OFFSET (PAGE_OFFSET + 3)
 #define ORBS_HEADER "ORBS"
-
-// LED constants
-#define NEOPIXEL_COUNT  24
 
 // Orb constants
 #define NUM_STATIONS 14
@@ -192,6 +170,8 @@ protected:
     Station getCurrentStationInfo();
     // Returns the trait name
     const char* getTraitName();
+    // Returns the enum index of the trait
+    int getTraitIndex();
     // Resets the station information, but keeps the trait
     int resetOrb();
     // Resets the orb with a new trait
@@ -208,8 +188,6 @@ protected:
     int setVisited(bool visited);
     // Sets the custom value of the current station
     int setCustom(byte value);
-    // Sets the LED pattern
-    void setLEDPattern(LEDPatternId patternId);
     // Reads and prints the entire NFC storage
     void printNFCStorage();
 
@@ -228,25 +206,13 @@ private:
     void printOrbInfo();
     void endOrbSession();
 
-    // LED pattern methods
-    void runLEDPatterns();
-    void led_rainbow();
-    void led_trait_chase();
-    void led_flash();
-    void led_error();
-    void led_no_energy();
-    uint32_t dimColor(uint32_t color, uint8_t intensity);
-    float lerp(float start, float end, float t);
-
     // Additional helper methods
     void handleError(const char* message);
     
     // Hardware objects
+    LEDRing ledRing;
     Adafruit_NeoPixel strip;
-    Adafruit_PN532 nfc;
-    
-    // LED variables
-    LEDPatternConfig ledPatternConfig;
+    PN532Reader nfcReader;
     
     // NFC
     byte page_buffer[4];
