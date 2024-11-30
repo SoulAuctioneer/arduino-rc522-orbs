@@ -6,10 +6,10 @@
  *  SDA: A4 (Pin 27)
  *  SCL: A5 (Pin 28)
  * Button Pins:
- *  S1: D8     // Add 1 energy
- *  S2: D9     // Add 5 energy  
- *  S3: D10    // Remove 1 energy
- *  S4: D11    // Remove 5 energy
+ *  S1: D7     // Add 1 energy
+ *  S2: D8     // Add 5 energy  
+ *  S3: D9    // Remove 1 energy
+ *  S4: D10    // Remove 5 energy
  * 
  *  * orbInfo contains information on connected orb:
  * - trait (byte, one of TraitId enum)
@@ -68,22 +68,22 @@ public:
 
         // Handle button inputs
         if (display.isButton1Pressed()) {
-            addEnergy(1);
+            removeEnergy(5);
             updateDisplay();
         }
         
         if (display.isButton2Pressed()) {
-            addEnergy(5);
+            removeEnergy(1);
             updateDisplay();
         }
 
         if (display.isButton3Pressed()) {
-            removeEnergy(5);
+            addEnergy(1);
             updateDisplay();
         }
 
         if (display.isButton4Pressed()) {
-            removeEnergy(1);
+            addEnergy(5);
             updateDisplay();
         }
     }
