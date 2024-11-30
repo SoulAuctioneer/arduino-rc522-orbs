@@ -31,7 +31,7 @@ protected:
     void onOrbConnected() override {
         Serial.println(F("Orb connected"));
         if (!getCurrentStationInfo().visited) {
-            addEnergy(1);
+            addEnergy(5);
         }
     }
 
