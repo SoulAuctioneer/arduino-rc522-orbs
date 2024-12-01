@@ -7,11 +7,12 @@
 
 // Override LED pattern configurations for hall sensor version
 const LEDPatternConfig HALL_LED_PATTERNS[] = {
-    {NO_ORB, 20, 20, 40},         // Dimmer, slower rainbow when no orb
-    {ORB_CONNECTED, 250, 80, 40},  // Medium brightness, slower rotation when orb present
-    {FLASH, 255, 10, 10},          // Keep flash the same
-    {ERROR, 255, 20, 20},          // Keep error the same
-    {NO_ENERGY, 100, 200, 10}      // Keep no energy the same
+    {RAINBOW_IDLE, 20, 20, 40},         // Dimmer, slower rainbow when no orb
+    {COLOR_CHASE, 250, 80, 40},         // Medium brightness, slower rotation when orb present
+    {TRANSITION_FLASH, 255, 10, 10},    // Keep flash the same
+    {ERROR, 255, 20, 20},              // Keep error the same
+    {LOW_ENERGY_PULSE, 100, 200, 10},   // Keep no energy the same
+    {SPARKLE, 180, 30, 20}             // Medium-high brightness, fast sparkle effect
 };
 
 class OrbDockHallSensor {

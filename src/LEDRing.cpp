@@ -1,27 +1,27 @@
 #include "LEDRing.h"
+#include <FastLED.h>
 
 LEDRing::LEDRing(const LEDPatternConfig* customPatterns) : 
-    strip(NEOPIXEL_COUNT, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800),
     patterns(customPatterns),
-    nextPatternId(NO_ORB) {
+    nextPatternId(RAINBOW_IDLE),
+    cycleComplete(false) {
     // Move pattern initialization to begin() instead of constructor
 }
 
 void LEDRing::begin() {
-    strip.begin();
-    strip.setBrightness(0);
-    strip.show();
+    FastLED.addLeds<WS2812B, NEOPIXEL_PIN, GRB>(leds, NEOPIXEL_COUNT);
+    FastLED.setBrightness(0);
+    FastLED.show();
     // Set initial pattern here after strip is initialized
-    setPattern(NO_ORB, NO_ORB);
+    setPattern(RAINBOW_IDLE);
     
     // Debug output
     Serial.print("LED Ring initialized with pattern interval: ");
     Serial.println(ledPatternConfig.interval);
 }
 
-void LEDRing::setPattern(LEDPatternId patternId, LEDPatternId nextPattern) {
+void LEDRing::setPattern(LEDPatternId patternId) {
     ledPatternConfig = patterns[static_cast<int>(patternId)];
-    nextPatternId = nextPattern;
     isNewPattern = true;
 }
 
@@ -33,14 +33,32 @@ void LEDRing::update(uint32_t color, uint8_t energy, uint8_t maxEnergy) {
     static unsigned long ledPreviousMillis = millis();
     static uint8_t ledBrightness;
     static unsigned int ledPatternInterval;
-    static LEDPatternId lastPatternId = LEDPatternId::NO_ORB;
+    static LEDPatternId lastPatternId = LEDPatternId::RAINBOW_IDLE;
     static byte lastEnergy = 0;  // Add this to track energy changes
 
     unsigned long currentMillis = millis();
 
-    // Update the interval when pattern changes or energy changes (for ORB_CONNECTED pattern)
+    // Check if we need to switch patterns
+    if (cycleComplete) {
+        // Log pattern completion
+        Serial.print("Pattern complete: ");
+        Serial.println(static_cast<int>(ledPatternConfig.id));
+        
+        if (!patternQueue.empty()) {
+            LEDPatternId nextPattern = patternQueue.getFront();
+            patternQueue.pop();
+            setPattern(nextPattern);
+        }
+        cycleComplete = false;  // Always reset cycleComplete
+    }
+
+    // Update the interval when pattern changes or energy changes (for COLOR_CHASE pattern)
     if (lastPatternId != ledPatternConfig.id || 
-        (ledPatternConfig.id == LEDPatternId::ORB_CONNECTED && lastEnergy != energy)) {
+        (ledPatternConfig.id == LEDPatternId::COLOR_CHASE && lastEnergy != energy)) {
+                
+        // Log pattern start
+        Serial.print("Starting LED pattern: ");
+        Serial.println(static_cast<int>(ledPatternConfig.id));
         
         lastPatternId = static_cast<LEDPatternId>(ledPatternConfig.id);
         lastEnergy = energy;
@@ -55,21 +73,27 @@ void LEDRing::update(uint32_t color, uint8_t energy, uint8_t maxEnergy) {
         ledPreviousMillis = currentMillis;
 
         switch (ledPatternConfig.id) {
-            case LEDPatternId::NO_ORB:
+            case LEDPatternId::RAINBOW_IDLE:
                 rainbow();
                 break;
-            case LEDPatternId::ORB_CONNECTED:
+            case LEDPatternId::COLOR_CHASE:
                 if (energy == 0) {
                     noEnergy();
                 } else {
                     colorChase(color, energy, maxEnergy);
                 }
                 break;
-            case LEDPatternId::FLASH:
+            case LEDPatternId::TRANSITION_FLASH:
                 flash(color);
                 break;
             case LEDPatternId::ERROR:
                 error();
+                break;
+            case LEDPatternId::LOW_ENERGY_PULSE:
+                noEnergy();
+                break;
+            case LEDPatternId::SPARKLE:
+                sparkle();
                 break;
             default:
                 break;
@@ -80,29 +104,21 @@ void LEDRing::update(uint32_t color, uint8_t energy, uint8_t maxEnergy) {
         // Set brightness
         if (ledBrightness != ledPatternConfig.brightness) {
             ledBrightness = ledPatternConfig.brightness;
-            strip.setBrightness(ledBrightness);
+            FastLED.setBrightness(ledBrightness);
         }
-        // Smooth brightness transitions
-        // TODO: This causes a bunch of flickering jank. Figure out why.
-        // if (ledBrightness != ledPatternConfig.brightness && currentMillis - ledBrightnessPreviousMillis >= ledPatternConfig.brightnessInterval) {
-        //     ledBrightnessPreviousMillis = currentMillis;
-        //     ledBrightness = lerp(ledBrightness, ledPatternConfig.brightness, ledPatternConfig.brightnessInterval);
-        //     strip.setBrightness(ledBrightness);
-        // }
 
-        strip.show();
+        FastLED.show();
     }
-
 }
 
 // Rainbow cycle along whole strip. Pass delay time (in ms) between frames.
 void LEDRing::rainbow() {
     static long firstPixelHue = 0;
     if (firstPixelHue < 5*65536) {
-      strip.rainbow(firstPixelHue, 1, 255, 255, true);
-      firstPixelHue += 256;
+        fill_rainbow(leds, NEOPIXEL_COUNT, firstPixelHue / 256);
+        firstPixelHue += 256;
     } else {
-      firstPixelHue = 0;
+        firstPixelHue = 0;
     }
 }
 
@@ -110,26 +126,41 @@ void LEDRing::rainbow() {
 void LEDRing::colorChase(uint32_t color, uint8_t energy, uint8_t maxEnergy) {
     static uint16_t currentPixel = 0;
     static uint8_t intensity = 255;
-    const uint16_t HUE_RANGE = 40; // Maximum hue shift in degrees
-    const uint8_t MIN_INTENSITY = 30;
-    static uint8_t globalIntensity = MIN_INTENSITY;  // Start at MIN_INTENSITY instead of 0
-    static int8_t globalDirection = 1;     // Start with increasing direction
+    static uint8_t globalIntensity = 0;
+    static int8_t globalDirection = 1;
     static uint16_t hueOffset = 0;
     static int8_t hueDirection = 1;
+    uint8_t adjustedIntensity;
+    const uint16_t HUE_RANGE = 25;
+    const uint8_t MIN_INTENSITY = 40;
 
     // Reset static variables when pattern changes
     if (isNewPattern) {
-        globalIntensity = MIN_INTENSITY;
+        globalIntensity = 0;
         globalDirection = 1;
         hueOffset = 0;
         hueDirection = 1;
     }
 
     // Update global intensity
-    globalIntensity += globalDirection * 9;  // Adjust 2 to change global fade speed
-    if (globalIntensity >= 255 || globalIntensity <= MIN_INTENSITY) {
-        globalDirection *= -1;
-        globalIntensity = constrain(globalIntensity, MIN_INTENSITY, 255);
+    if (globalDirection > 0) {
+        // When increasing, check for overflow
+        uint16_t newIntensity = globalIntensity + (globalDirection * 9);
+        if (newIntensity >= 255) {
+            globalIntensity = 255;
+            globalDirection = -1;
+        } else {
+            globalIntensity = newIntensity;
+        }
+    } else {
+        // When decreasing, check for underflow
+        int16_t newIntensity = globalIntensity + (globalDirection * 9);
+        if (newIntensity <= MIN_INTENSITY) {
+            globalIntensity = MIN_INTENSITY;
+            globalDirection = 1;
+        } else {
+            globalIntensity = newIntensity;
+        }
     }
 
     // Update hue offset
@@ -144,33 +175,18 @@ void LEDRing::colorChase(uint32_t color, uint8_t energy, uint8_t maxEnergy) {
     uint8_t g = (uint8_t)(color >> 8);
     uint8_t b = (uint8_t)color;
     
-    // Replace the RGB shift code with proper HSV-based hue shifting
-    uint32_t shiftedColor;
-    if (hueOffset != 0) {
-        // Convert RGB to HSV
-        float h, s, v;
-        RGBtoHSV(r, g, b, &h, &s, &v);
-        
-        // Shift the hue (h is 0-360)
-        h += (float)hueOffset / HUE_RANGE * h; // Shift by up to HUE_RANGE degrees
-        if (h >= 360.0f) h -= 360.0f;
-        if (h < 0.0f) h += 360.0f;
-        
-        // Convert back to RGB
-        uint8_t new_r, new_g, new_b;
-        HSVtoRGB(h, s, v, &new_r, &new_g, &new_b);
-        shiftedColor = strip.Color(new_r, new_g, new_b);
-    } else {
-        shiftedColor = color;
-    }
-
-    // Calculate opposite pixel position
-    uint16_t oppositePixel = (currentPixel + (NEOPIXEL_COUNT / 2)) % NEOPIXEL_COUNT;
+    // Convert uint32_t color to CRGB
+    CRGB baseColor = CRGB(r, g, b);
     
-    // Set both bright dots
-    uint8_t adjustedIntensity = (uint16_t)intensity * globalIntensity / 255;
-    strip.setPixelColor(currentPixel, dimColor(shiftedColor, adjustedIntensity));
-    strip.setPixelColor(oppositePixel, dimColor(shiftedColor, adjustedIntensity));
+    // Use FastLED's HSV functions instead of custom ones
+    CHSV hsv = rgb2hsv_approximate(baseColor);
+    hsv.hue += hueOffset;
+    CRGB shiftedColor = hsv;
+    
+    // Calculate initial adjustedIntensity
+    adjustedIntensity = intensity * globalIntensity / 255;
+    leds[currentPixel] = shiftedColor;
+    leds[currentPixel].nscale8(adjustedIntensity);
     
     // Set pixels between the dots with decreasing intensity
     for (int i = 1; i < NEOPIXEL_COUNT/2; i++) {
@@ -184,8 +200,10 @@ void LEDRing::colorChase(uint32_t color, uint8_t energy, uint8_t maxEnergy) {
         adjustedIntensity = (uint16_t)fadeIntensity * globalIntensity / 255;
         
         if (adjustedIntensity > 0) {
-            strip.setPixelColor(pixel1, dimColor(shiftedColor, adjustedIntensity));
-            strip.setPixelColor(pixel2, dimColor(shiftedColor, adjustedIntensity));
+            leds[pixel1] = shiftedColor;
+            leds[pixel1].nscale8(adjustedIntensity);
+            leds[pixel2] = shiftedColor;
+            leds[pixel2].nscale8(adjustedIntensity);
         }
     }
     
@@ -197,23 +215,18 @@ void LEDRing::flash(uint32_t color) {
     static uint8_t intensity = 255;
     static int8_t intensityDirection = -1;
     static uint16_t hueOffset = 0;
-    static bool cycleComplete = false;
 
-    // If cycle is complete, switch to appropriate pattern
-    if (cycleComplete) {
+    // Reset static variables when pattern changes
+    if (isNewPattern) {
         intensity = 255;
         intensityDirection = -1;
         hueOffset = 0;
         cycleComplete = false;
-        setPattern(nextPatternId, nextPatternId);
-        return;
     }
 
-    // Get base trait color and extract hue
-    uint8_t r = (uint8_t)(color >> 16);
-    uint8_t g = (uint8_t)(color >> 8); 
-    uint8_t b = (uint8_t)color;
-
+    // Convert uint32_t color to CRGB
+    CRGB baseColor = CRGB((uint8_t)(color >> 16), (uint8_t)(color >> 8), (uint8_t)color);
+    
     // Fast fade intensity
     intensity += intensityDirection * 12;
     if (intensity <= 30 || intensity >= 255) {
@@ -221,6 +234,7 @@ void LEDRing::flash(uint32_t color) {
         intensity = constrain(intensity, 30, 255);
         if (intensity <= 30) {
             cycleComplete = true;
+            return;  // Return early since we're done with this pattern
         }
     }
 
@@ -232,15 +246,68 @@ void LEDRing::flash(uint32_t color) {
         // Calculate hue offset for this pixel
         uint16_t pixelHue = (hueOffset + (360 * i / NEOPIXEL_COUNT)) % 360;
         
-        // Create color with similar hue to trait color but varying
-        float hueShift = sin(pixelHue * PI / 180.0) * 30; // +/- 30 degree hue shift
-        uint32_t shiftedColor = strip.Color(
-            r + (r * hueShift/360),
-            g + (g * hueShift/360),
-            b + (b * hueShift/360)
-        );
+        // Convert base color to HSV
+        CHSV hsv = rgb2hsv_approximate(baseColor);
+        
+        // Apply hue shift
+        float hueShift = sin(pixelHue * PI / 180.0) * 30;
+        hsv.hue += hueShift;
+        
+        // Convert back to RGB and apply intensity
+        CRGB shiftedColor = hsv;
+        leds[i] = shiftedColor;
+        leds[i].nscale8(intensity);
+    }
+}
 
-        strip.setPixelColor(i, dimColor(shiftedColor, intensity));
+void LEDRing::sparkle() {
+    static uint8_t baseIntensity = 180;
+    static uint8_t sparklePositions[NEOPIXEL_COUNT] = {0};
+    static bool hasSparkled = false;  // Track if we've had at least one sparkle
+    
+    // Reset tracking variable when pattern starts
+    if (isNewPattern) {
+        hasSparkled = false;
+    }
+    
+    // Gold base color (RGB: 255, 215, 0)
+    CRGB goldColor = CRGB(255, 215, 0);
+    
+    // Accent colors
+    CRGB orangeColor = CRGB(255, 140, 0);
+    CRGB blueColor = CRGB(30, 144, 255);
+    
+    bool anyActiveSparkles = false;
+    
+    // Set base shimmer
+    for (int i = 0; i < NEOPIXEL_COUNT; i++) {
+        // Create subtle shimmer effect
+        uint8_t shimmer = random8(baseIntensity - 30, baseIntensity + 30);
+        leds[i] = goldColor;
+        leds[i].nscale8(shimmer);
+        
+        // Randomly create new sparkles
+        if (random8() < 20 && sparklePositions[i] == 0) {  // 8% chance for new sparkle
+            sparklePositions[i] = random8(20, 255);  // Random initial brightness
+            hasSparkled = true;
+            
+            // 10% chance for accent color
+            if (random8() < 25) {
+                leds[i] = random8() < 128 ? orangeColor : blueColor;
+            }
+        }
+        
+        // Update existing sparkles
+        if (sparklePositions[i] > 0) {
+            anyActiveSparkles = true;
+            leds[i].nscale8(sparklePositions[i]);
+            sparklePositions[i] = sparklePositions[i] > 30 ? sparklePositions[i] - 30 : 0;
+        }
+    }
+    
+    // Set cycleComplete when we've had at least one sparkle and all sparkles have faded
+    if (hasSparkled && !anyActiveSparkles) {
+        cycleComplete = true;
     }
 }
 
@@ -256,9 +323,9 @@ void LEDRing::noEnergy() {
     }
 
     // Set all pixels to dimmed red
-    for(int i = 0; i < NEOPIXEL_COUNT; i++) {
-        strip.setPixelColor(i, strip.Color(intensity, 0, 0));
-    }
+    CRGB redColor = CRGB(255, 0, 0);
+    redColor.nscale8(intensity);
+    fill_solid(leds, NEOPIXEL_COUNT, redColor);
 }
 
 void LEDRing::error() {
@@ -280,78 +347,31 @@ void LEDRing::error() {
         }
     }
 
-    for(int i = 0; i < NEOPIXEL_COUNT; i++) {
-        strip.setPixelColor(i, r, 0, b);
-    }
+    // Create color and fill strip
+    CRGB errorColor = CRGB(r, 0, b);
+    fill_solid(leds, NEOPIXEL_COUNT, errorColor);
 }
 
 // Helper function to dim a 32-bit color value by a certain intensity (0-255)
 uint32_t LEDRing::dimColor(uint32_t color, uint8_t intensity) {
-  uint8_t r = (uint8_t)(color >> 16);
-  uint8_t g = (uint8_t)(color >> 8);
-  uint8_t b = (uint8_t)color;
-  
-  r = (r * intensity) >> 8;
-  g = (g * intensity) >> 8;
-  b = (b * intensity) >> 8;
-  
-  return strip.Color(r, g, b);
+    // Extract RGB components from color
+    uint8_t r = (uint8_t)(color >> 16);
+    uint8_t g = (uint8_t)(color >> 8);
+    uint8_t b = (uint8_t)color;
+    
+    CRGB rgb = CRGB(r, g, b);
+    rgb.nscale8(intensity);
+    return (uint32_t)rgb.r << 16 | (uint32_t)rgb.g << 8 | rgb.b;
 }
 
 float LEDRing::lerp(float start, float end, float t) {
     return start + t * (end - start);
 }
 
-// Add these helper functions to the LEDRing class
-void LEDRing::RGBtoHSV(uint8_t r, uint8_t g, uint8_t b, float *h, float *s, float *v) {
-    float rf = r / 255.0f;
-    float gf = g / 255.0f;
-    float bf = b / 255.0f;
-    float cmax = max(max(rf, gf), bf);
-    float cmin = min(min(rf, gf), bf);
-    float delta = cmax - cmin;
-
-    // Calculate hue
-    if (delta == 0) {
-        *h = 0;
-    } else if (cmax == rf) {
-        *h = 60.0f * fmod(((gf - bf) / delta), 6);
-    } else if (cmax == gf) {
-        *h = 60.0f * (((bf - rf) / delta) + 2);
-    } else {
-        *h = 60.0f * (((rf - gf) / delta) + 4);
-    }
-    
-    if (*h < 0) *h += 360.0f;
-
-    // Calculate saturation
-    *s = (cmax == 0) ? 0 : (delta / cmax);
-    
-    // Calculate value
-    *v = cmax;
-}
-
-void LEDRing::HSVtoRGB(float h, float s, float v, uint8_t *r, uint8_t *g, uint8_t *b) {
-    float c = v * s;
-    float x = c * (1 - abs(fmod(h / 60.0f, 2) - 1));
-    float m = v - c;
-    float rf, gf, bf;
-
-    if (h >= 0 && h < 60) {
-        rf = c; gf = x; bf = 0;
-    } else if (h >= 60 && h < 120) {
-        rf = x; gf = c; bf = 0;
-    } else if (h >= 120 && h < 180) {
-        rf = 0; gf = c; bf = x;
-    } else if (h >= 180 && h < 240) {
-        rf = 0; gf = x; bf = c;
-    } else if (h >= 240 && h < 300) {
-        rf = x; gf = 0; bf = c;
-    } else {
-        rf = c; gf = 0; bf = x;
-    }
-
-    *r = (rf + m) * 255;
-    *g = (gf + m) * 255;
-    *b = (bf + m) * 255;
+// Add new method to queue patterns
+void LEDRing::queuePattern(LEDPatternId patternId) {
+    patternQueue.push(patternId);
+    // Log pattern queuing
+    Serial.print("Queued LED pattern: ");
+    Serial.println(static_cast<int>(patternId));
 }

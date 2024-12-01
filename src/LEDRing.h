@@ -1,16 +1,18 @@
 #pragma once
-#include <Adafruit_NeoPixel.h>
+#include <FastLED.h>
+#include "SimpleQueue.h"
 
 // NeoPixel constants
 #define NEOPIXEL_PIN    6
 #define NEOPIXEL_COUNT  24
 
 enum LEDPatternId {
-    NO_ORB,
-    ORB_CONNECTED,
-    FLASH,
+    RAINBOW_IDLE,
+    COLOR_CHASE,
+    TRANSITION_FLASH,
     ERROR,
-    NO_ENERGY
+    LOW_ENERGY_PULSE,
+    SPARKLE
 };
 
 struct LEDPatternConfig {
@@ -22,30 +24,35 @@ struct LEDPatternConfig {
 
 // Default LED pattern configurations
 const LEDPatternConfig LED_PATTERNS[] = {
-    {NO_ORB, 20, 20, 20},
-    {ORB_CONNECTED, 255, 80, 20},
-    {FLASH, 255, 10, 10},
+    {RAINBOW_IDLE, 20, 20, 20},
+    {COLOR_CHASE, 255, 80, 20},
+    {TRANSITION_FLASH, 255, 10, 10},
     {ERROR, 255, 20, 20},
-    {NO_ENERGY, 100, 200, 10}
+    {LOW_ENERGY_PULSE, 100, 200, 10},
+    {SPARKLE, 180, 30, 20}  // Medium-high brightness, fast interval for sparkles
 };
 
 class LEDRing {
 public:
     LEDRing(const LEDPatternConfig* patterns = LED_PATTERNS);
     void begin();
-    void setPattern(LEDPatternId patternId, LEDPatternId nextPattern);
+    void setPattern(LEDPatternId patternId);
     LEDPatternId getPattern();
     void update(uint32_t color, uint8_t energy, uint8_t maxEnergy);
+    void queuePattern(LEDPatternId patternId);
 
 private:
-    Adafruit_NeoPixel strip;
+    CRGB leds[NEOPIXEL_COUNT];
     LEDPatternConfig ledPatternConfig;
     const LEDPatternConfig* patterns;
     LEDPatternId nextPatternId;
     bool isNewPattern;
+    bool cycleComplete;
+    SimpleQueue<LEDPatternId> patternQueue;
     void rainbow();
     void colorChase(uint32_t color, uint8_t energy, uint8_t maxEnergy);
     void flash(uint32_t color);
+    void sparkle();
     void noEnergy();
     void error();
     

@@ -11,7 +11,7 @@ OrbDock::OrbDock(StationId id) :
     isOrbConnected = false;
     isUnformattedNFC = false;
     currentMillis = 0;
-    ledRing.setPattern(LEDPatternId::NO_ORB, LEDPatternId::NO_ORB);
+    ledRing.setPattern(LEDPatternId::RAINBOW_IDLE);
 }
 
 // Destructor
@@ -74,13 +74,13 @@ void OrbDock::loop() {
                 if (!isUnformattedNFC) {
                     Serial.println(F("Unformatted NFC connected"));
                     isUnformattedNFC = true;
-                    ledRing.setPattern(LEDPatternId::ERROR, LEDPatternId::ERROR);
+                    ledRing.setPattern(LEDPatternId::ERROR);
                     onUnformattedNFC();
                 }
                 break;
             case STATUS_TRUE:
                 isOrbConnected = true;
-                ledRing.setPattern(LEDPatternId::ORB_CONNECTED, LEDPatternId::ORB_CONNECTED);
+                ledRing.setPattern(LEDPatternId::COLOR_CHASE);
                 readOrbInfo();
                 setVisited(true);
                 onOrbConnected();
@@ -145,7 +145,7 @@ void OrbDock::printOrbInfo() {
 }
 
 void OrbDock::endOrbSession() {
-    ledRing.setPattern(LEDPatternId::NO_ORB, LEDPatternId::NO_ORB);
+    ledRing.setPattern(LEDPatternId::RAINBOW_IDLE);
     isOrbConnected = false;
     isNFCConnected = false;
     isUnformattedNFC = false;
@@ -209,7 +209,7 @@ const char* OrbDock::getTraitName() {
     if (traitIndex < 0 || static_cast<size_t>(traitIndex) >= sizeof(TRAIT_NAMES)/sizeof(TRAIT_NAMES[0])) {
         Serial.print(F("ERROR: Invalid trait detected: "));
         Serial.println(traitIndex);
-        ledRing.setPattern(LEDPatternId::ERROR, LEDPatternId::ERROR);
+        ledRing.setPattern(LEDPatternId::ERROR);
         return nullptr;
     }
     return TRAIT_NAMES[traitIndex];
@@ -246,8 +246,11 @@ int OrbDock::setEnergy(byte energy) {
     memcpy(page_buffer, energyBytes, 4);
     int result = writePage(ENERGY_PAGE, page_buffer);
     if (result == STATUS_SUCCEEDED) {
-        LEDPatternId nextPattern = ledRing.getPattern();
-        ledRing.setPattern(LEDPatternId::FLASH, nextPattern);
+        LEDPatternId currentPattern = ledRing.getPattern();
+        // First set the flash pattern
+        ledRing.setPattern(LEDPatternId::TRANSITION_FLASH);
+        // Then queue the original pattern to return to after flash
+        ledRing.queuePattern(currentPattern);
     }
     return result;
 }
@@ -330,7 +333,7 @@ int OrbDock::formatNFC(TraitId trait) {
         return STATUS_FAILED;
     }
     
-    ledRing.setPattern(LEDPatternId::ORB_CONNECTED, LEDPatternId::ORB_CONNECTED);
+    ledRing.setPattern(LEDPatternId::COLOR_CHASE);
 
     return STATUS_SUCCEEDED;
 }

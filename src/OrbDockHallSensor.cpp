@@ -19,15 +19,15 @@ void OrbDockHallSensor::begin() {
     // Setup hall sensor pin
     pinMode(hallSensorPin, INPUT);
     
-    // Start with NO_ORB pattern
-    ledRing.setPattern(NO_ORB, NO_ORB);
+    // Start with RAINBOW_IDLE pattern
+    ledRing.setPattern(RAINBOW_IDLE);
     
     // Debug output
     Serial.println("Hall LED Pattern Intervals:");
-    Serial.print("NO_ORB interval: ");
-    Serial.println(HALL_LED_PATTERNS[NO_ORB].interval);
-    Serial.print("ORB_CONNECTED interval: ");
-    Serial.println(HALL_LED_PATTERNS[ORB_CONNECTED].interval);
+    Serial.print("RAINBOW_IDLE interval: ");
+    Serial.println(HALL_LED_PATTERNS[RAINBOW_IDLE].interval);
+    Serial.print("COLOR_CHASE interval: ");
+    Serial.println(HALL_LED_PATTERNS[COLOR_CHASE].interval);
 }
 
 void OrbDockHallSensor::loop() {
@@ -39,8 +39,6 @@ void OrbDockHallSensor::loop() {
         
         // Read hall sensor (LOW when magnet is present)
         bool orbDetected = (digitalRead(hallSensorPin) == HIGH);
-        Serial.print("Orb detected: ");
-        Serial.println(orbDetected);
         
         // If orb state changed
         if (orbDetected != isOrbPresent) {
@@ -48,10 +46,11 @@ void OrbDockHallSensor::loop() {
             
             if (isOrbPresent) {
                 // Show orange/yellow pattern when orb is present
-                ledRing.setPattern(FLASH, ORB_CONNECTED);
+                ledRing.setPattern(TRANSITION_FLASH);
+                ledRing.queuePattern(COLOR_CHASE);
             } else {
                 // Show default pattern when no orb
-                ledRing.setPattern(NO_ORB, NO_ORB);
+                ledRing.setPattern(RAINBOW_IDLE);
             }
         }
     }
