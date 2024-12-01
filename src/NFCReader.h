@@ -2,7 +2,6 @@
 #define NFC_READER_H
 
 #include <Adafruit_PN532.h>
-#include <PN5180.h>
 
 // PN532 pins - latest design
 #define PN532_SCK   (5)
@@ -49,19 +48,6 @@ public:
 private:
     Adafruit_PN532 nfc;
     bool tryPinConfiguration(uint8_t sck, uint8_t miso, uint8_t mosi, uint8_t ss);
-};
-
-// PN5180 implementation
-class PN5180Reader : public NFCReaderBase {
-public:
-    PN5180Reader(uint8_t nss, uint8_t rst, uint8_t busy);
-    bool begin() override;
-    bool isTagPresent() override;
-    bool readPage(int page, uint8_t* buffer) override;
-    bool writePage(int page, uint8_t* data) override;
-
-private:
-    PN5180 nfc;
 };
 
 #endif

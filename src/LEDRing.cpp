@@ -1,27 +1,28 @@
 #include "LEDRing.h"
 
-const LEDPatternConfig LED_PATTERNS[] = {
-    {LEDPatternId::NO_ORB, 255, 20, 20},
-    {LEDPatternId::ORB_CONNECTED, 255, 20, 20},
-    {LEDPatternId::FLASH, 255, 10, 10},
-    {LEDPatternId::ERROR, 255, 20, 20}
-};
-
-LEDRing::LEDRing() : 
+LEDRing::LEDRing(const LEDPatternConfig* customPatterns) : 
     strip(NEOPIXEL_COUNT, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800),
-    nextPatternId(LEDPatternId::NO_ORB) {
-    setPattern(LEDPatternId::NO_ORB, LEDPatternId::NO_ORB);
+    patterns(customPatterns),
+    nextPatternId(NO_ORB) {
+    // Move pattern initialization to begin() instead of constructor
 }
 
 void LEDRing::begin() {
     strip.begin();
     strip.setBrightness(0);
     strip.show();
+    // Set initial pattern here after strip is initialized
+    setPattern(NO_ORB, NO_ORB);
+    
+    // Debug output
+    Serial.print("LED Ring initialized with pattern interval: ");
+    Serial.println(ledPatternConfig.interval);
 }
 
 void LEDRing::setPattern(LEDPatternId patternId, LEDPatternId nextPattern) {
-    ledPatternConfig = LED_PATTERNS[static_cast<int>(patternId)];
+    ledPatternConfig = patterns[static_cast<int>(patternId)];
     nextPatternId = nextPattern;
+    isNewPattern = true;
 }
 
 LEDPatternId LEDRing::getPattern() {
@@ -29,13 +30,11 @@ LEDPatternId LEDRing::getPattern() {
 }
 
 void LEDRing::update(uint32_t color, uint8_t energy, uint8_t maxEnergy) {
-    static unsigned long ledPreviousMillis;
+    static unsigned long ledPreviousMillis = millis();
     static uint8_t ledBrightness;
     static unsigned int ledPatternInterval;
     static LEDPatternId lastPatternId = LEDPatternId::NO_ORB;
     static byte lastEnergy = 0;  // Add this to track energy changes
-    const uint8_t MIN_INTERVAL = 10;
-    const uint8_t MAX_INTERVAL = 120;
 
     unsigned long currentMillis = millis();
 
@@ -45,15 +44,11 @@ void LEDRing::update(uint32_t color, uint8_t energy, uint8_t maxEnergy) {
         
         lastPatternId = static_cast<LEDPatternId>(ledPatternConfig.id);
         lastEnergy = energy;
+        ledPreviousMillis = currentMillis;
         
-        if (ledPatternConfig.id == LEDPatternId::ORB_CONNECTED) {
-            ledPatternInterval = constrain(
-                map(energy, 0, maxEnergy, MAX_INTERVAL, MIN_INTERVAL),
-                MIN_INTERVAL, MAX_INTERVAL
-            );
-        } else {
-            ledPatternInterval = ledPatternConfig.interval;
-        }
+        // Use the configured interval from patterns
+        ledPatternInterval = ledPatternConfig.interval;
+        isNewPattern = true;
     }
 
     if (currentMillis - ledPreviousMillis >= ledPatternInterval) {
@@ -79,6 +74,8 @@ void LEDRing::update(uint32_t color, uint8_t energy, uint8_t maxEnergy) {
             default:
                 break;
         }
+
+        isNewPattern = false;
 
         // Set brightness
         if (ledBrightness != ledPatternConfig.brightness) {
@@ -109,16 +106,24 @@ void LEDRing::rainbow() {
     }
 }
 
-// Rotates a weakening dot around the NeoPixel ring using the trait color
-void LEDRing::colorChase(uint32_t traitColor, uint8_t energy, uint8_t maxEnergy) {
+// Rotates a weakening dot around the NeoPixel ring using the given color
+void LEDRing::colorChase(uint32_t color, uint8_t energy, uint8_t maxEnergy) {
     static uint16_t currentPixel = 0;
     static uint8_t intensity = 255;
-    static uint8_t globalIntensity = 0;
-    static int8_t globalDirection = 1;
+    const uint16_t HUE_RANGE = 40; // Maximum hue shift in degrees
+    const uint8_t MIN_INTENSITY = 30;
+    static uint8_t globalIntensity = MIN_INTENSITY;  // Start at MIN_INTENSITY instead of 0
+    static int8_t globalDirection = 1;     // Start with increasing direction
     static uint16_t hueOffset = 0;
     static int8_t hueDirection = 1;
-    const uint16_t HUE_RANGE = 100; // Maximum hue shift in either direction
-    const uint8_t MIN_INTENSITY = 30;
+
+    // Reset static variables when pattern changes
+    if (isNewPattern) {
+        globalIntensity = MIN_INTENSITY;
+        globalDirection = 1;
+        hueOffset = 0;
+        hueDirection = 1;
+    }
 
     // Update global intensity
     globalIntensity += globalDirection * 9;  // Adjust 2 to change global fade speed
@@ -135,26 +140,37 @@ void LEDRing::colorChase(uint32_t traitColor, uint8_t energy, uint8_t maxEnergy)
     }
 
     // Find the trait color and apply hue shift
-    uint32_t baseColor = traitColor;
-    uint8_t r = (uint8_t)(baseColor >> 16);
-    uint8_t g = (uint8_t)(baseColor >> 8);
-    uint8_t b = (uint8_t)baseColor;
+    uint8_t r = (uint8_t)(color >> 16);
+    uint8_t g = (uint8_t)(color >> 8);
+    uint8_t b = (uint8_t)color;
     
-    // Simple hue shift by adjusting RGB values
-    float shift = (float)hueOffset / HUE_RANGE * 0.2; // Scale down shift effect
-    uint32_t traitColor = strip.Color(
-        constrain(r * (1 + shift), 0, 255),
-        constrain(g * (1 + shift), 0, 255),
-        constrain(b * (1 + shift), 0, 255)
-    );
+    // Replace the RGB shift code with proper HSV-based hue shifting
+    uint32_t shiftedColor;
+    if (hueOffset != 0) {
+        // Convert RGB to HSV
+        float h, s, v;
+        RGBtoHSV(r, g, b, &h, &s, &v);
+        
+        // Shift the hue (h is 0-360)
+        h += (float)hueOffset / HUE_RANGE * h; // Shift by up to HUE_RANGE degrees
+        if (h >= 360.0f) h -= 360.0f;
+        if (h < 0.0f) h += 360.0f;
+        
+        // Convert back to RGB
+        uint8_t new_r, new_g, new_b;
+        HSVtoRGB(h, s, v, &new_r, &new_g, &new_b);
+        shiftedColor = strip.Color(new_r, new_g, new_b);
+    } else {
+        shiftedColor = color;
+    }
 
     // Calculate opposite pixel position
     uint16_t oppositePixel = (currentPixel + (NEOPIXEL_COUNT / 2)) % NEOPIXEL_COUNT;
     
     // Set both bright dots
     uint8_t adjustedIntensity = (uint16_t)intensity * globalIntensity / 255;
-    strip.setPixelColor(currentPixel, dimColor(traitColor, adjustedIntensity));
-    strip.setPixelColor(oppositePixel, dimColor(traitColor, adjustedIntensity));
+    strip.setPixelColor(currentPixel, dimColor(shiftedColor, adjustedIntensity));
+    strip.setPixelColor(oppositePixel, dimColor(shiftedColor, adjustedIntensity));
     
     // Set pixels between the dots with decreasing intensity
     for (int i = 1; i < NEOPIXEL_COUNT/2; i++) {
@@ -168,8 +184,8 @@ void LEDRing::colorChase(uint32_t traitColor, uint8_t energy, uint8_t maxEnergy)
         adjustedIntensity = (uint16_t)fadeIntensity * globalIntensity / 255;
         
         if (adjustedIntensity > 0) {
-            strip.setPixelColor(pixel1, dimColor(traitColor, adjustedIntensity));
-            strip.setPixelColor(pixel2, dimColor(traitColor, adjustedIntensity));
+            strip.setPixelColor(pixel1, dimColor(shiftedColor, adjustedIntensity));
+            strip.setPixelColor(pixel2, dimColor(shiftedColor, adjustedIntensity));
         }
     }
     
@@ -284,4 +300,58 @@ uint32_t LEDRing::dimColor(uint32_t color, uint8_t intensity) {
 
 float LEDRing::lerp(float start, float end, float t) {
     return start + t * (end - start);
+}
+
+// Add these helper functions to the LEDRing class
+void LEDRing::RGBtoHSV(uint8_t r, uint8_t g, uint8_t b, float *h, float *s, float *v) {
+    float rf = r / 255.0f;
+    float gf = g / 255.0f;
+    float bf = b / 255.0f;
+    float cmax = max(max(rf, gf), bf);
+    float cmin = min(min(rf, gf), bf);
+    float delta = cmax - cmin;
+
+    // Calculate hue
+    if (delta == 0) {
+        *h = 0;
+    } else if (cmax == rf) {
+        *h = 60.0f * fmod(((gf - bf) / delta), 6);
+    } else if (cmax == gf) {
+        *h = 60.0f * (((bf - rf) / delta) + 2);
+    } else {
+        *h = 60.0f * (((rf - gf) / delta) + 4);
+    }
+    
+    if (*h < 0) *h += 360.0f;
+
+    // Calculate saturation
+    *s = (cmax == 0) ? 0 : (delta / cmax);
+    
+    // Calculate value
+    *v = cmax;
+}
+
+void LEDRing::HSVtoRGB(float h, float s, float v, uint8_t *r, uint8_t *g, uint8_t *b) {
+    float c = v * s;
+    float x = c * (1 - abs(fmod(h / 60.0f, 2) - 1));
+    float m = v - c;
+    float rf, gf, bf;
+
+    if (h >= 0 && h < 60) {
+        rf = c; gf = x; bf = 0;
+    } else if (h >= 60 && h < 120) {
+        rf = x; gf = c; bf = 0;
+    } else if (h >= 120 && h < 180) {
+        rf = 0; gf = c; bf = x;
+    } else if (h >= 180 && h < 240) {
+        rf = 0; gf = x; bf = c;
+    } else if (h >= 240 && h < 300) {
+        rf = x; gf = 0; bf = c;
+    } else {
+        rf = c; gf = 0; bf = x;
+    }
+
+    *r = (rf + m) * 255;
+    *g = (gf + m) * 255;
+    *b = (bf + m) * 255;
 }

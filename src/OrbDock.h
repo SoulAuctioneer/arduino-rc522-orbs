@@ -85,54 +85,6 @@ struct Station {
     byte custom;
 };
 
-enum LEDPatternId {
-    LED_PATTERN_NO_ORB,
-    LED_PATTERN_ORB_CONNECTED,
-    LED_PATTERN_FLASH,
-    LED_PATTERN_ERROR,
-    LED_PATTERN_NO_ENERGY
-};
-
-struct LEDPatternConfig {
-    int id;
-    uint8_t brightness;
-    uint16_t interval;
-    float brightnessInterval;
-};
-
-const LEDPatternConfig LED_PATTERNS[] = {
-    {
-        .id = LED_PATTERN_NO_ORB,
-        .brightness = 200,
-        .interval = 15,
-        .brightnessInterval = 5.0f
-    },
-    {
-        .id = LED_PATTERN_ORB_CONNECTED,
-        .brightness = 255,
-        .interval = 80,
-        .brightnessInterval = 5.0f
-    },
-    {
-        .id = LED_PATTERN_FLASH,
-        .brightness = 255,
-        .interval = 10,
-        .brightnessInterval = 5.0f
-    },
-    {
-        .id = LED_PATTERN_ERROR,
-        .brightness = 255,
-        .interval = 5,
-        .brightnessInterval = 5.0f,
-    },
-    {
-        .id = LED_PATTERN_NO_ENERGY,
-        .brightness = 100,
-        .interval = 200,
-        .brightnessInterval = 10.0f
-    }
-};
-
 // Additional helper structs/enums
 struct OrbInfo {
     TraitId trait;

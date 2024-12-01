@@ -1,18 +1,22 @@
 #include <Arduino.h>
-#include "OrbDockConfigurizer.cpp"
-#include "OrbDockBasic.cpp"
-#include "OrbDockCasino.cpp"
-#include "OrbDockComms.h"
-#include "OrbDockLedDistiller.cpp"
-//#include "OrbDockLedStrip.cpp"
 
-
-// OrbDockBasic orbDock{};
+//#include "OrbDockConfigurizer.cpp"
 //OrbDockConfigurizer orbDock{};
+
+//#include "OrbDockBasic.cpp"
+//OrbDockBasic orbDock{};
+
+//#include "OrbDockCasino.cpp"
 //OrbDockCasino orbDock{};
-//OrbDockLedStrip orbDock{};
-OrbDockComms orbDock(10, 11, 9, 13);
+
+//#include "OrbDockComms.h"
+//OrbDockComms orbDock(10, 11, 9, 13);
+
+//#include "OrbDockLedDistiller.cpp"
 //OrbDockLedDistiller orbDock{};
+
+#include "OrbDockHallSensor.h"
+OrbDockHallSensor orbDock{};
 
 void setup() {
     Serial.begin(115200);
