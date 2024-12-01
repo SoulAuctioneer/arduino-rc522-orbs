@@ -49,13 +49,13 @@ const char* const TRAIT_NAMES[] = {
     "HOPELESS"
 };
 
-const uint32_t TRAIT_COLORS[] = {
-    0xFF0000,  // None
-    0xFF2800,  // Orange for RUMINATE (Rumination)
-    0xFF6000,  // Yellow for SHAME (Shame Spiral)
-    0x20FF00,  // Green for DOUBT (Self Doubt)
-    0xFF00D2,  // Pink/Magenta for DISCONTENT (Discontentment)
-    0x1400FF   // Blue for HOPELESS (Hopelessness)
+const CHSV TRAIT_COLORS[] = {
+    CHSV(0, 255, 255),     // None (Red)
+    CHSV(8, 255, 255),     // RUMINATE (Orange-Red)
+    CHSV(25, 255, 255),    // SHAME (Yellow-Orange) 
+    CHSV(96, 255, 255),    // DOUBT (Green)
+    CHSV(213, 255, 255),   // DISCONTENT (Pink/Magenta)
+    CHSV(160, 255, 255)    // HOPELESS (Blue)
 };
 
 const char* const TRAIT_COLOR_NAMES[] = {
@@ -99,6 +99,7 @@ public:
     
     virtual void begin();
     virtual void loop();
+    CHSV getTraitColor();
 
 protected:
     // State variables

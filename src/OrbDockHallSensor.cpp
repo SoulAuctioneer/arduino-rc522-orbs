@@ -1,5 +1,7 @@
 #include "OrbDockHallSensor.h"
 
+const CHSV OrbDockHallSensor::ORB_PRESENT_COLOR = CHSV(32, 255, 255);
+
 OrbDockHallSensor::OrbDockHallSensor(int hallSensorPin) : 
     ledRing(HALL_LED_PATTERNS),
     hallSensorPin(hallSensorPin),
@@ -46,7 +48,7 @@ void OrbDockHallSensor::loop() {
             
             if (isOrbPresent) {
                 // Show orange/yellow pattern when orb is present
-                ledRing.setPattern(TRANSITION_FLASH);
+                ledRing.setPattern(SPARKLE_OUTWARD);
                 ledRing.queuePattern(COLOR_CHASE);
             } else {
                 // Show default pattern when no orb
@@ -56,7 +58,7 @@ void OrbDockHallSensor::loop() {
     }
     
     // Update LED pattern
-    ledRing.update(isOrbPresent ? ORB_PRESENT_COLOR : 0xFF0000, 
+    ledRing.update(isOrbPresent ? ORB_PRESENT_COLOR : CHSV(0, 255, 255), 
                    50,  // Lower energy value for slower movement
                    255  // Max value
     );

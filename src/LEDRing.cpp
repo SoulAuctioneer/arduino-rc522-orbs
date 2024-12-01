@@ -29,12 +29,12 @@ LEDPatternId LEDRing::getPattern() {
     return ledPatternConfig.id;
 }
 
-void LEDRing::update(uint32_t color, uint8_t energy, uint8_t maxEnergy) {
+void LEDRing::update(CHSV color, uint8_t energy, uint8_t maxEnergy) {
     static unsigned long ledPreviousMillis = millis();
     static uint8_t ledBrightness;
     static unsigned int ledPatternInterval;
     static LEDPatternId lastPatternId = LEDPatternId::RAINBOW_IDLE;
-    static byte lastEnergy = 0;  // Add this to track energy changes
+    static byte lastEnergy = 0;
 
     unsigned long currentMillis = millis();
 
@@ -42,7 +42,7 @@ void LEDRing::update(uint32_t color, uint8_t energy, uint8_t maxEnergy) {
     if (cycleComplete) {
         // Log pattern completion
         Serial.print("Pattern complete: ");
-        Serial.println(static_cast<int>(ledPatternConfig.id));
+        Serial.println(getPatternName(ledPatternConfig.id));
         
         if (!patternQueue.empty()) {
             LEDPatternId nextPattern = patternQueue.getFront();
@@ -58,7 +58,7 @@ void LEDRing::update(uint32_t color, uint8_t energy, uint8_t maxEnergy) {
                 
         // Log pattern start
         Serial.print("Starting LED pattern: ");
-        Serial.println(static_cast<int>(ledPatternConfig.id));
+        Serial.println(getPatternName(ledPatternConfig.id));
         
         lastPatternId = static_cast<LEDPatternId>(ledPatternConfig.id);
         lastEnergy = energy;
@@ -95,6 +95,9 @@ void LEDRing::update(uint32_t color, uint8_t energy, uint8_t maxEnergy) {
             case LEDPatternId::SPARKLE:
                 sparkle();
                 break;
+            case LEDPatternId::SPARKLE_OUTWARD:
+                sparkleOutward();
+                break;
             default:
                 break;
         }
@@ -123,95 +126,103 @@ void LEDRing::rainbow() {
 }
 
 // Rotates a weakening dot around the NeoPixel ring using the given color
-void LEDRing::colorChase(uint32_t color, uint8_t energy, uint8_t maxEnergy) {
+void LEDRing::colorChase(CHSV color, uint8_t energy, uint8_t maxEnergy) {
     static uint16_t currentPixel = 0;
-    static uint8_t intensity = 255;
-    static uint8_t globalIntensity = 0;
-    static int8_t globalDirection = 1;
-    static uint16_t hueOffset = 0;
-    static int8_t hueDirection = 1;
-    uint8_t adjustedIntensity;
-    const uint16_t HUE_RANGE = 25;
-    const uint8_t MIN_INTENSITY = 40;
+    static uint8_t phase = 0;
+    static uint8_t hueOffset = 0;
+    static int8_t hueDirection = -1;
+    static CRGB previousLeds[NEOPIXEL_COUNT];
+    static uint8_t transitionProgress = 0;
+    const uint8_t HUE_RANGE = 40;
+    const uint8_t MIN_INTENSITY = 60;
+
+    // Calculate base intensity from energy level
+    uint8_t intensity = map(energy, 0, maxEnergy, MIN_INTENSITY, 255);
+    
+    // Update global intensity using sin8
+    uint8_t globalIntensity = map(sin8(phase), 0, 255, MIN_INTENSITY, intensity);
+    phase += 4;
 
     // Reset static variables when pattern changes
     if (isNewPattern) {
-        globalIntensity = 0;
-        globalDirection = 1;
+        phase = 64;
         hueOffset = 0;
-        hueDirection = 1;
+        hueDirection = -1;
+        currentPixel = 0;
+        transitionProgress = 0;
+        
+        CRGB rgbColor;
+        hsv2rgb_rainbow(color, rgbColor);
+        fill_solid(leds, NEOPIXEL_COUNT, rgbColor);
+        memcpy(previousLeds, leds, sizeof(CRGB) * NEOPIXEL_COUNT);
+        
+        Serial.println("Pattern Reset - Initial hue: " + String(color.hue));
+        return;
     }
 
-    // Update global intensity
-    if (globalDirection > 0) {
-        // When increasing, check for overflow
-        uint16_t newIntensity = globalIntensity + (globalDirection * 9);
-        if (newIntensity >= 255) {
-            globalIntensity = 255;
-            globalDirection = -1;
-        } else {
-            globalIntensity = newIntensity;
-        }
-    } else {
-        // When decreasing, check for underflow
-        int16_t newIntensity = globalIntensity + (globalDirection * 9);
-        if (newIntensity <= MIN_INTENSITY) {
-            globalIntensity = MIN_INTENSITY;
-            globalDirection = 1;
-        } else {
-            globalIntensity = newIntensity;
-        }
-    }
-
-    // Update hue offset
-    hueOffset += hueDirection;
-    if (hueOffset >= HUE_RANGE || hueOffset <= 0) {
+    // Update hue offset - smooth back and forth motion
+    hueOffset = (uint8_t)(hueOffset + hueDirection);
+    if (hueOffset >= HUE_RANGE || hueOffset == 0) {
         hueDirection *= -1;
-        hueOffset = constrain(hueOffset, 0, HUE_RANGE);
+        Serial.println("Direction change - hueOffset: " + String(hueOffset) + 
+                      ", direction: " + String(hueDirection));
     }
 
-    // Find the trait color and apply hue shift
-    uint8_t r = (uint8_t)(color >> 16);
-    uint8_t g = (uint8_t)(color >> 8);
-    uint8_t b = (uint8_t)color;
+    // Calculate pattern colors with explicit hue modification
+    CHSV baseColor = color;
+    baseColor.hue = color.hue + hueOffset;
     
-    // Convert uint32_t color to CRGB
-    CRGB baseColor = CRGB(r, g, b);
+    // Debug output every 10 frames
+    if (currentPixel % 10 == 0) {
+        Serial.println("Hue values - original: " + String(color.hue) + 
+                      ", offset: " + String(hueOffset) + 
+                      ", final: " + String(baseColor.hue));
+    }
+
+    // Store the target pattern colors in a temporary array
+    CRGB targetLeds[NEOPIXEL_COUNT];
+    memcpy(targetLeds, leds, sizeof(CRGB) * NEOPIXEL_COUNT);
+
+    // Calculate the pattern
+    uint8_t adjustedIntensity = globalIntensity;
+    CRGB adjustedColor = CRGB(baseColor);
+    adjustedColor.nscale8(adjustedIntensity);
+    targetLeds[currentPixel] = adjustedColor;
     
-    // Use FastLED's HSV functions instead of custom ones
-    CHSV hsv = rgb2hsv_approximate(baseColor);
-    hsv.hue += hueOffset;
-    CRGB shiftedColor = hsv;
-    
-    // Calculate initial adjustedIntensity
-    adjustedIntensity = intensity * globalIntensity / 255;
-    leds[currentPixel] = shiftedColor;
-    leds[currentPixel].nscale8(adjustedIntensity);
-    
-    // Set pixels between the dots with decreasing intensity
     for (int i = 1; i < NEOPIXEL_COUNT/2; i++) {
-        // Calculate pixels on both sides
         uint16_t pixel1 = (currentPixel + i) % NEOPIXEL_COUNT;
         uint16_t pixel2 = (currentPixel - i + NEOPIXEL_COUNT) % NEOPIXEL_COUNT;
         
-        // Calculate fade based on distance to nearest bright dot
         float fadeRatio = pow(float(NEOPIXEL_COUNT/4 - abs(i - NEOPIXEL_COUNT/4)) / (NEOPIXEL_COUNT/4), 2);
-        uint8_t fadeIntensity = round(intensity * fadeRatio);
-        adjustedIntensity = (uint16_t)fadeIntensity * globalIntensity / 255;
+        uint8_t fadeIntensity = round(globalIntensity * fadeRatio);
+        adjustedIntensity = fadeIntensity;
         
         if (adjustedIntensity > 0) {
-            leds[pixel1] = shiftedColor;
-            leds[pixel1].nscale8(adjustedIntensity);
-            leds[pixel2] = shiftedColor;
-            leds[pixel2].nscale8(adjustedIntensity);
+            CRGB rgbColor;
+            hsv2rgb_rainbow(baseColor, rgbColor);
+            rgbColor.nscale8(adjustedIntensity);
+            targetLeds[pixel1] = rgbColor;
+            targetLeds[pixel2] = rgbColor;
+        } else {
+            targetLeds[pixel1] = CRGB::Black;
+            targetLeds[pixel2] = CRGB::Black;
         }
     }
+
+    // Blend between previous and target states
+    transitionProgress = min(255, transitionProgress + 8);  // Increase transition progress
+    for (int i = 0; i < NEOPIXEL_COUNT; i++) {
+        leds[i] = blend(previousLeds[i], targetLeds[i], transitionProgress);
+    }
+
+    // Store current state as previous for next frame
+    memcpy(previousLeds, leds, sizeof(CRGB) * NEOPIXEL_COUNT);
     
     // Move to next pixel
     currentPixel = (currentPixel + 1) % NEOPIXEL_COUNT;
 }
 
-void LEDRing::flash(uint32_t color) {
+void LEDRing::flash(CHSV color) {
     static uint8_t intensity = 255;
     static int8_t intensityDirection = -1;
     static uint16_t hueOffset = 0;
@@ -224,8 +235,11 @@ void LEDRing::flash(uint32_t color) {
         cycleComplete = false;
     }
 
-    // Convert uint32_t color to CRGB
-    CRGB baseColor = CRGB((uint8_t)(color >> 16), (uint8_t)(color >> 8), (uint8_t)color);
+    // Use HSV color directly
+    CHSV baseColor = color;
+    
+    // Modify hue for effects
+    baseColor.hue += hueOffset;
     
     // Fast fade intensity
     intensity += intensityDirection * 12;
@@ -241,86 +255,88 @@ void LEDRing::flash(uint32_t color) {
     // Rotate hue offset in opposite direction
     hueOffset = (hueOffset - 8 + 360) % 360;
 
-    // Fill strip with hue-shifted colors
+    // Fill strip with hue-shifted colors and apply intensity scaling
     for (int i = 0; i < NEOPIXEL_COUNT; i++) {
-        // Calculate hue offset for this pixel
-        uint16_t pixelHue = (hueOffset + (360 * i / NEOPIXEL_COUNT)) % 360;
-        
-        // Convert base color to HSV
-        CHSV hsv = rgb2hsv_approximate(baseColor);
-        
-        // Apply hue shift
-        float hueShift = sin(pixelHue * PI / 180.0) * 30;
-        hsv.hue += hueShift;
-        
-        // Convert back to RGB and apply intensity
-        CRGB shiftedColor = hsv;
-        leds[i] = shiftedColor;
-        leds[i].nscale8(intensity);
+        CHSV hsv = baseColor;
+        hsv.val = scale8(hsv.val, intensity);
+        leds[i] = hsv;
     }
 }
 
 void LEDRing::sparkle() {
-    static uint8_t baseIntensity = 180;
     static uint8_t sparklePositions[NEOPIXEL_COUNT] = {0};
-    static bool hasSparkled = false;  // Track if we've had at least one sparkle
+    static uint8_t fadeToWarm[NEOPIXEL_COUNT] = {0};
+    static uint16_t sparkleCount = 0;
+    static const uint16_t REQUIRED_SPARKLES = 24;
     
-    // Reset tracking variable when pattern starts
+    // Reset tracking variables when pattern starts
     if (isNewPattern) {
-        hasSparkled = false;
+        memset(sparklePositions, 0, NEOPIXEL_COUNT);
+        memset(fadeToWarm, 0, NEOPIXEL_COUNT);
+        sparkleCount = 0;
     }
     
-    // Gold base color (RGB: 255, 215, 0)
-    CRGB goldColor = CRGB(255, 215, 0);
+    // Warm glow color (orange-yellow)
+    CRGB warmGlow = CRGB(255, 140, 0);
     
-    // Accent colors
-    CRGB orangeColor = CRGB(255, 140, 0);
-    CRGB blueColor = CRGB(30, 144, 255);
+    // Spark colors
+    CRGB colors[] = {
+        CRGB(255, 100, 0),    // Orange
+        CRGB(255, 160, 0),    // Amber
+        CRGB(255, 200, 0),    // Yellow
+        CRGB(255, 120, 147)   // Pink
+    };
     
     bool anyActiveSparkles = false;
     
-    // Set base shimmer
     for (int i = 0; i < NEOPIXEL_COUNT; i++) {
-        // Create subtle shimmer effect
-        uint8_t shimmer = random8(baseIntensity - 30, baseIntensity + 30);
-        leds[i] = goldColor;
-        leds[i].nscale8(shimmer);
-        
-        // Randomly create new sparkles
-        if (random8() < 20 && sparklePositions[i] == 0) {  // 8% chance for new sparkle
-            sparklePositions[i] = random8(20, 255);  // Random initial brightness
-            hasSparkled = true;
+        // Generate new sparks
+        if (sparkleCount < REQUIRED_SPARKLES && random8() < 25 && sparklePositions[i] == 0) {
+            sparklePositions[i] = random8(150, 255);
+            fadeToWarm[i] = 255;
+            sparkleCount++;
             
-            // 10% chance for accent color
-            if (random8() < 25) {
-                leds[i] = random8() < 128 ? orangeColor : blueColor;
-            }
+            // Pick random spark color
+            leds[i] = colors[random8(4)];
+            leds[i].nscale8(sparklePositions[i]);
         }
         
-        // Update existing sparkles
+        // Update existing sparks and fade to warm
         if (sparklePositions[i] > 0) {
             anyActiveSparkles = true;
+            
+            // Blend between spark color and warm glow
+            if (fadeToWarm[i] > 0) {
+                CRGB currentColor = leds[i];
+                leds[i] = blend(warmGlow, currentColor, fadeToWarm[i]);
+                fadeToWarm[i] = fadeToWarm[i] > 20 ? fadeToWarm[i] - 20 : 0;
+            } else {
+                leds[i] = warmGlow;
+            }
+            
             leds[i].nscale8(sparklePositions[i]);
-            sparklePositions[i] = sparklePositions[i] > 30 ? sparklePositions[i] - 30 : 0;
+            sparklePositions[i] = sparklePositions[i] > 15 ? sparklePositions[i] - 15 : 0;
+        } else if (sparkleCount >= REQUIRED_SPARKLES) {
+            // Keep warm glow after sparkling is done
+            leds[i] = warmGlow;
+            leds[i].nscale8(180);  // Slightly dimmed warm glow
+        } else {
+            leds[i] = CRGB::Black;  // Only black during initial sparkling phase
         }
     }
     
-    // Set cycleComplete when we've had at least one sparkle and all sparkles have faded
-    if (hasSparkled && !anyActiveSparkles) {
+    // Complete the pattern when we've generated enough sparkles and active sparkles are done
+    if (sparkleCount >= REQUIRED_SPARKLES && !anyActiveSparkles) {
         cycleComplete = true;
     }
 }
 
 void LEDRing::noEnergy() {
-    static uint8_t intensity = 0;
-    static int8_t direction = 1;
+    static uint8_t phase = 0;
     
-    // Slowly pulse intensity up and down
-    intensity += direction;
-    if (intensity >= 255 || intensity <= 0) {
-        direction *= -1;
-        intensity = constrain(intensity, 0, 255); 
-    }
+    // Use sin8 for smooth pulsing
+    uint8_t intensity = sin8(phase);
+    phase += 2; // Controls speed of pulse
 
     // Set all pixels to dimmed red
     CRGB redColor = CRGB(255, 0, 0);
@@ -352,18 +368,6 @@ void LEDRing::error() {
     fill_solid(leds, NEOPIXEL_COUNT, errorColor);
 }
 
-// Helper function to dim a 32-bit color value by a certain intensity (0-255)
-uint32_t LEDRing::dimColor(uint32_t color, uint8_t intensity) {
-    // Extract RGB components from color
-    uint8_t r = (uint8_t)(color >> 16);
-    uint8_t g = (uint8_t)(color >> 8);
-    uint8_t b = (uint8_t)color;
-    
-    CRGB rgb = CRGB(r, g, b);
-    rgb.nscale8(intensity);
-    return (uint32_t)rgb.r << 16 | (uint32_t)rgb.g << 8 | rgb.b;
-}
-
 float LEDRing::lerp(float start, float end, float t) {
     return start + t * (end - start);
 }
@@ -371,7 +375,121 @@ float LEDRing::lerp(float start, float end, float t) {
 // Add new method to queue patterns
 void LEDRing::queuePattern(LEDPatternId patternId) {
     patternQueue.push(patternId);
-    // Log pattern queuing
     Serial.print("Queued LED pattern: ");
-    Serial.println(static_cast<int>(patternId));
+    Serial.println(getPatternName(patternId));
 }
+
+const char* LEDRing::getPatternName(LEDPatternId id) {
+    switch (id) {
+        case LEDPatternId::RAINBOW_IDLE: return "RAINBOW_IDLE";
+        case LEDPatternId::COLOR_CHASE: return "COLOR_CHASE";
+        case LEDPatternId::TRANSITION_FLASH: return "TRANSITION_FLASH";
+        case LEDPatternId::ERROR: return "ERROR";
+        case LEDPatternId::LOW_ENERGY_PULSE: return "LOW_ENERGY_PULSE";
+        case LEDPatternId::SPARKLE: return "SPARKLE";
+        case LEDPatternId::SPARKLE_OUTWARD: return "SPARKLE_OUTWARD";
+        default: return "UNKNOWN";
+    }
+}
+
+void LEDRing::sparkleOutward() {
+    static uint8_t sparklePositions[NEOPIXEL_COUNT] = {0};
+    static uint8_t fadeToWarm[NEOPIXEL_COUNT] = {0};
+    static uint16_t currentRadius = 0;
+    static const uint16_t MAX_RADIUS = NEOPIXEL_COUNT / 2;
+    
+    // Reset tracking variables when pattern starts
+    if (isNewPattern) {
+        memset(sparklePositions, 0, NEOPIXEL_COUNT);
+        memset(fadeToWarm, 0, NEOPIXEL_COUNT);
+        currentRadius = 0;
+    }
+    
+    // Warm glow color (orange-yellow)
+    CRGB warmGlow = CRGB(255, 140, 0);
+    
+    // Spark colors
+    CRGB colors[] = {
+        CRGB(255, 100, 0),    // Orange
+        CRGB(255, 160, 0),    // Amber
+        CRGB(255, 200, 0),    // Yellow
+        CRGB(255, 120, 147)   // Pink
+    };
+    
+    // Center points (for even number of LEDs, we use two center points)
+    const uint16_t center1 = NEOPIXEL_COUNT / 2;
+    const uint16_t center2 = (NEOPIXEL_COUNT / 2) - 1;
+    
+    // Expand outward
+    if (currentRadius < MAX_RADIUS) {
+        // Light up new positions
+        int pos1_forward = (center1 + currentRadius) % NEOPIXEL_COUNT;
+        int pos1_backward = (center1 - currentRadius + NEOPIXEL_COUNT) % NEOPIXEL_COUNT;
+        int pos2_forward = (center2 + currentRadius) % NEOPIXEL_COUNT;
+        int pos2_backward = (center2 - currentRadius + NEOPIXEL_COUNT) % NEOPIXEL_COUNT;
+        
+        // Only start new sparks if position isn't already active
+        if (sparklePositions[pos1_forward] == 0) {
+            sparklePositions[pos1_forward] = random8(150, 255);
+            fadeToWarm[pos1_forward] = 255;
+            leds[pos1_forward] = colors[random8(4)];
+            leds[pos1_forward].nscale8(sparklePositions[pos1_forward]);
+        }
+        
+        if (sparklePositions[pos1_backward] == 0) {
+            sparklePositions[pos1_backward] = random8(150, 255);
+            fadeToWarm[pos1_backward] = 255;
+            leds[pos1_backward] = colors[random8(4)];
+            leds[pos1_backward].nscale8(sparklePositions[pos1_backward]);
+        }
+        
+        if (sparklePositions[pos2_forward] == 0) {
+            sparklePositions[pos2_forward] = random8(150, 255);
+            fadeToWarm[pos2_forward] = 255;
+            leds[pos2_forward] = colors[random8(4)];
+            leds[pos2_forward].nscale8(sparklePositions[pos2_forward]);
+        }
+        
+        if (sparklePositions[pos2_backward] == 0) {
+            sparklePositions[pos2_backward] = random8(150, 255);
+            fadeToWarm[pos2_backward] = 255;
+            leds[pos2_backward] = colors[random8(4)];
+            leds[pos2_backward].nscale8(sparklePositions[pos2_backward]);
+        }
+        
+        currentRadius++;
+    }
+    
+    // Update existing sparks and fade to warm
+    bool anyActiveSparkles = false;
+    for (int i = 0; i < NEOPIXEL_COUNT; i++) {
+        if (sparklePositions[i] > 0) {
+            anyActiveSparkles = true;
+            
+            // Blend between spark color and warm glow
+            if (fadeToWarm[i] > 0) {
+                CRGB currentColor = leds[i];
+                leds[i] = blend(warmGlow, currentColor, fadeToWarm[i]);
+                fadeToWarm[i] = fadeToWarm[i] > 20 ? fadeToWarm[i] - 20 : 0;
+            } else {
+                leds[i] = warmGlow;
+            }
+            
+            leds[i].nscale8(sparklePositions[i]);
+            sparklePositions[i] = sparklePositions[i] > 15 ? sparklePositions[i] - 15 : 0;
+        } else if (currentRadius >= MAX_RADIUS) {
+            // Keep warm glow after sparkling is done
+            leds[i] = warmGlow;
+            leds[i].nscale8(180);  // Slightly dimmed warm glow
+        } else {
+            leds[i] = CRGB::Black;  // Only black during initial sparkling phase
+        }
+    }
+    
+    // Complete the pattern when we've reached maximum radius and active sparkles are done
+    if (currentRadius >= MAX_RADIUS && !anyActiveSparkles) {
+        cycleComplete = true;
+    }
+}
+
+

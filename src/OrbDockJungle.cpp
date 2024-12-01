@@ -50,11 +50,10 @@ protected:
         }
 
         // Get trait color
-        uint32_t traitColor = TRAIT_COLORS[static_cast<int>(orbInfo.trait)];
-        uint8_t r = (traitColor >> 16) & 0xFF;
-        uint8_t g = (traitColor >> 8) & 0xFF;
-        uint8_t b = traitColor & 0xFF;
-        baseColor = CRGB(r, g, b);
+        CHSV hsvColor = TRAIT_COLORS[static_cast<int>(orbInfo.trait)];
+        CRGB rgbColor;
+        hsv2rgb_rainbow(hsvColor, rgbColor);
+        baseColor = rgbColor;
     }
 
     void onOrbDisconnected() override {

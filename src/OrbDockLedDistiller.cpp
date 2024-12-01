@@ -79,15 +79,10 @@ protected:
         }
 
         // Get trait color from TRAIT_COLORS array using orbInfo.trait as index
-        uint32_t traitColor = TRAIT_COLORS[static_cast<int>(orbInfo.trait)];
-        
-        // Extract RGB components from 32-bit color
-        uint8_t r = (traitColor >> 16) & 0xFF;
-        uint8_t g = (traitColor >> 8) & 0xFF; 
-        uint8_t b = traitColor & 0xFF;
-
-        // Set color using RGB values
-        color = CRGB(r, g, b);
+        CHSV hsvColor = TRAIT_COLORS[static_cast<int>(orbInfo.trait)];
+        CRGB rgbColor;
+        hsv2rgb_rainbow(hsvColor, rgbColor);
+        color = rgbColor;
 
         inTransition = true;
     }

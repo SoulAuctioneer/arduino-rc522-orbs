@@ -12,7 +12,8 @@ enum LEDPatternId {
     TRANSITION_FLASH,
     ERROR,
     LOW_ENERGY_PULSE,
-    SPARKLE
+    SPARKLE,
+    SPARKLE_OUTWARD
 };
 
 struct LEDPatternConfig {
@@ -29,7 +30,8 @@ const LEDPatternConfig LED_PATTERNS[] = {
     {TRANSITION_FLASH, 255, 10, 10},
     {ERROR, 255, 20, 20},
     {LOW_ENERGY_PULSE, 100, 200, 10},
-    {SPARKLE, 180, 30, 20}  // Medium-high brightness, fast interval for sparkles
+    {SPARKLE, 255, 60, 20},
+    {SPARKLE_OUTWARD, 255, 60, 20}
 };
 
 class LEDRing {
@@ -38,7 +40,7 @@ public:
     void begin();
     void setPattern(LEDPatternId patternId);
     LEDPatternId getPattern();
-    void update(uint32_t color, uint8_t energy, uint8_t maxEnergy);
+    void update(CHSV color, uint8_t energy, uint8_t maxEnergy);
     void queuePattern(LEDPatternId patternId);
 
 private:
@@ -49,15 +51,14 @@ private:
     bool isNewPattern;
     bool cycleComplete;
     SimpleQueue<LEDPatternId> patternQueue;
+    const char* getPatternName(LEDPatternId id); 
     void rainbow();
-    void colorChase(uint32_t color, uint8_t energy, uint8_t maxEnergy);
-    void flash(uint32_t color);
+    void colorChase(CHSV color, uint8_t energy, uint8_t maxEnergy);
+    void flash(CHSV color);
     void sparkle();
+    void sparkleOutward();
     void noEnergy();
     void error();
     
-    uint32_t dimColor(uint32_t color, uint8_t intensity);
     float lerp(float start, float end, float t);
-    void RGBtoHSV(uint8_t r, uint8_t g, uint8_t b, float *h, float *s, float *v);
-    void HSVtoRGB(float h, float s, float v, uint8_t *r, uint8_t *g, uint8_t *b);
 };

@@ -40,8 +40,8 @@ void OrbDock::begin() {
 void OrbDock::loop() {
     currentMillis = millis();
 
-    // Update LED patterns
-    uint32_t traitColor = TRAIT_COLORS[getTraitIndex()];
+    // Update LED patterns using HSV color
+    CHSV traitColor = getTraitColor();
     ledRing.update(traitColor, orbInfo.energy, ALCHEMIZATION_ENERGY);
 
     // Check for NFC / Orb presence periodically
@@ -420,3 +420,15 @@ void OrbDock::onOrbConnected() {}
 void OrbDock::onOrbDisconnected() {}
 void OrbDock::onError(const char* errorMessage) {}
 void OrbDock::onUnformattedNFC() {}
+
+// Modify getTraitIndex() to return CHSV instead of int
+CHSV OrbDock::getTraitColor() {
+    int traitIndex = static_cast<int>(orbInfo.trait);
+    if (traitIndex < 0 || static_cast<size_t>(traitIndex) >= sizeof(TRAIT_COLORS)/sizeof(TRAIT_COLORS[0])) {
+        Serial.print(F("ERROR: Invalid trait detected: "));
+        Serial.println(traitIndex);
+        ledRing.setPattern(LEDPatternId::ERROR);
+        return CHSV(0, 255, 255); // Red for error
+    }
+    return TRAIT_COLORS[traitIndex];
+}

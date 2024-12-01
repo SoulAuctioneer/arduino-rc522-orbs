@@ -12,7 +12,8 @@ const LEDPatternConfig HALL_LED_PATTERNS[] = {
     {TRANSITION_FLASH, 255, 10, 10},    // Keep flash the same
     {ERROR, 255, 20, 20},              // Keep error the same
     {LOW_ENERGY_PULSE, 100, 200, 10},   // Keep no energy the same
-    {SPARKLE, 180, 30, 20}             // Medium-high brightness, fast sparkle effect
+    {SPARKLE, 180, 70, 20},             // Medium-high brightness, fast sparkle effect
+    {SPARKLE_OUTWARD, 180, 40, 20}      // Medium-high brightness, fast outward sparkle effect
 };
 
 class OrbDockHallSensor {
@@ -28,7 +29,7 @@ private:
     unsigned long lastCheckTime;
     
     static const unsigned long CHECK_INTERVAL = 300; // Check every 300ms
-    static const uint32_t ORB_PRESENT_COLOR = 0xFF2800; // Orange/yellow color
+    static const CHSV ORB_PRESENT_COLOR; // Pure orange color in HSV
 };
 
 #endif 
