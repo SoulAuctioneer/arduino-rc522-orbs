@@ -129,11 +129,11 @@ void LEDRing::rainbow() {
 void LEDRing::colorChase(CHSV color, uint8_t energy, uint8_t maxEnergy) {
     static uint16_t currentPixel = 0;
     static uint8_t phase = 0;
-    static uint8_t hueOffset = 0;
+    static int8_t hueOffset = 0;
     static int8_t hueDirection = -1;
     static CRGB previousLeds[NEOPIXEL_COUNT];
     static uint8_t transitionProgress = 0;
-    const uint8_t HUE_RANGE = 40;
+    const int8_t HUE_RANGE = 15;
     const uint8_t MIN_INTENSITY = 60;
 
     // Calculate base intensity from energy level
@@ -151,8 +151,14 @@ void LEDRing::colorChase(CHSV color, uint8_t energy, uint8_t maxEnergy) {
         currentPixel = 0;
         transitionProgress = 0;
         
+        // Calculate initial intensity
+        uint8_t intensity = map(energy, 0, maxEnergy, MIN_INTENSITY, 255);
+        uint8_t globalIntensity = map(sin8(phase), 0, 255, MIN_INTENSITY, intensity);
+        
+        // Apply the intensity to the initial fill
         CRGB rgbColor;
         hsv2rgb_rainbow(color, rgbColor);
+        rgbColor.nscale8(globalIntensity);  // Scale the initial color
         fill_solid(leds, NEOPIXEL_COUNT, rgbColor);
         memcpy(previousLeds, leds, sizeof(CRGB) * NEOPIXEL_COUNT);
         
@@ -161,8 +167,8 @@ void LEDRing::colorChase(CHSV color, uint8_t energy, uint8_t maxEnergy) {
     }
 
     // Update hue offset - smooth back and forth motion
-    hueOffset = (uint8_t)(hueOffset + hueDirection);
-    if (hueOffset >= HUE_RANGE || hueOffset == 0) {
+    hueOffset += hueDirection;
+    if (hueOffset <= -HUE_RANGE || hueOffset >= HUE_RANGE) {
         hueDirection *= -1;
         Serial.println("Direction change - hueOffset: " + String(hueOffset) + 
                       ", direction: " + String(hueDirection));
@@ -173,11 +179,11 @@ void LEDRing::colorChase(CHSV color, uint8_t energy, uint8_t maxEnergy) {
     baseColor.hue = color.hue + hueOffset;
     
     // Debug output every 10 frames
-    if (currentPixel % 10 == 0) {
-        Serial.println("Hue values - original: " + String(color.hue) + 
-                      ", offset: " + String(hueOffset) + 
-                      ", final: " + String(baseColor.hue));
-    }
+    // if (currentPixel % 10 == 0) {
+    //     Serial.println("Hue values - original: " + String(color.hue) + 
+    //                   ", offset: " + String(hueOffset) + 
+    //                   ", final: " + String(baseColor.hue));
+    // }
 
     // Store the target pattern colors in a temporary array
     CRGB targetLeds[NEOPIXEL_COUNT];
@@ -319,7 +325,7 @@ void LEDRing::sparkle() {
         } else if (sparkleCount >= REQUIRED_SPARKLES) {
             // Keep warm glow after sparkling is done
             leds[i] = warmGlow;
-            leds[i].nscale8(180);  // Slightly dimmed warm glow
+            leds[i].nscale8(255);
         } else {
             leds[i] = CRGB::Black;  // Only black during initial sparkling phase
         }

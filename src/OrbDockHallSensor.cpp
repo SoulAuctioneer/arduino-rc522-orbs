@@ -1,6 +1,7 @@
 #include "OrbDockHallSensor.h"
 
 const CHSV OrbDockHallSensor::ORB_PRESENT_COLOR = CHSV(32, 255, 255);
+const CHSV OrbDockHallSensor::NO_ORB_COLOR = CHSV(32, 255, 100);  // Golden color with lower value
 
 OrbDockHallSensor::OrbDockHallSensor(int hallSensorPin) : 
     ledRing(HALL_LED_PATTERNS),
@@ -8,58 +9,76 @@ OrbDockHallSensor::OrbDockHallSensor(int hallSensorPin) :
     isOrbPresent(false),
     lastCheckTime(0)
 {
-    // KY-003 Hall Effect Sensor Wiring:
+    // OH49E Linear Hall Effect Sensor Wiring:
     // - VCC → 5V
     // - GND → GND
-    // - SIGNAL → hallSensorPin (digital input)
+    // - OUT → hallSensorPin (analog input)
 }
 
 void OrbDockHallSensor::begin() {
-    // Initialize LED ring
     ledRing.begin();
+    ledRing.setPattern(COLOR_CHASE);
     
-    // Setup hall sensor pin
-    pinMode(hallSensorPin, INPUT);
+    // Initialize baseline by taking several readings
+    int sum = 0;
+    for (int i = 0; i < MOVING_AVG_SIZE; i++) {
+        sum += analogRead(hallSensorPin);
+        readings[i] = analogRead(hallSensorPin);
+        delay(10);  // Small delay between readings
+    }
+    baselineValue = sum / MOVING_AVG_SIZE;
     
-    // Start with RAINBOW_IDLE pattern
-    ledRing.setPattern(RAINBOW_IDLE);
-    
-    // Debug output
-    Serial.println("Hall LED Pattern Intervals:");
-    Serial.print("RAINBOW_IDLE interval: ");
-    Serial.println(HALL_LED_PATTERNS[RAINBOW_IDLE].interval);
-    Serial.print("COLOR_CHASE interval: ");
-    Serial.println(HALL_LED_PATTERNS[COLOR_CHASE].interval);
+    Serial.print("Initial baseline value: ");
+    Serial.println(baselineValue);
 }
 
 void OrbDockHallSensor::loop() {
     unsigned long currentMillis = millis();
     
-    // Check hall sensor periodically
     if (currentMillis - lastCheckTime >= CHECK_INTERVAL) {
         lastCheckTime = currentMillis;
         
-        // Read hall sensor (LOW when magnet is present)
-        bool orbDetected = (digitalRead(hallSensorPin) == HIGH);
+        int hallValue = analogRead(hallSensorPin);
+        readings[readIndex] = hallValue;
         
-        // If orb state changed
+        int sum = 0;
+        for (int i = 0; i < MOVING_AVG_SIZE; i++) {
+            sum += readings[i];
+        }
+        movingAverage = sum / MOVING_AVG_SIZE;
+        
+        readIndex = (readIndex + 1) % MOVING_AVG_SIZE;
+
+        // Check for significant deviation from baseline
+        int deviation = movingAverage - baselineValue;
+        bool orbDetected = abs(deviation) > DETECTION_MARGIN;
+
+        Serial.print("Hall: ");
+        Serial.print(hallValue);
+        Serial.print(" Avg: ");
+        Serial.print(movingAverage);
+        Serial.print(" Base: ");
+        Serial.print(baselineValue);
+        Serial.print(" Deviation: ");
+        Serial.print(deviation);
+        Serial.print(" Orb detected: ");
+        Serial.println(orbDetected ? "true" : "false");
+        
         if (orbDetected != isOrbPresent) {
             isOrbPresent = orbDetected;
             
             if (isOrbPresent) {
-                // Show orange/yellow pattern when orb is present
                 ledRing.setPattern(SPARKLE_OUTWARD);
                 ledRing.queuePattern(COLOR_CHASE);
             } else {
-                // Show default pattern when no orb
-                ledRing.setPattern(RAINBOW_IDLE);
+                ledRing.setPattern(COLOR_CHASE);  // Changed from RAINBOW_IDLE
             }
         }
     }
     
-    // Update LED pattern
-    ledRing.update(isOrbPresent ? ORB_PRESENT_COLOR : CHSV(0, 255, 255), 
-                   50,  // Lower energy value for slower movement
+    // Update LED pattern with appropriate color and energy based on orb presence
+    ledRing.update(isOrbPresent ? ORB_PRESENT_COLOR : NO_ORB_COLOR, 
+                   isOrbPresent ? 50 : 1,  // Lower energy when no orb
                    255  // Max value
     );
 }

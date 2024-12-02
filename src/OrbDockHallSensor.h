@@ -3,7 +3,7 @@
 
 #include "LEDRing.h"
 
-#define HALL_SENSOR_PIN 2
+#define HALL_SENSOR_PIN A0
 
 // Override LED pattern configurations for hall sensor version
 const LEDPatternConfig HALL_LED_PATTERNS[] = {
@@ -28,8 +28,19 @@ private:
     bool isOrbPresent;
     unsigned long lastCheckTime;
     
-    static const unsigned long CHECK_INTERVAL = 300; // Check every 300ms
-    static const CHSV ORB_PRESENT_COLOR; // Pure orange color in HSV
+    // New moving average members
+    static const int MOVING_AVG_SIZE = 10;     // Reduced for responsiveness
+    static const int DETECTION_MARGIN = 30;    // Reduced from 50 to account for 3.3V range
+    
+    int baselineValue;  // Will be set during initialization
+    bool isBaselineSet = false;  // Track if we've established baseline
+    int readings[MOVING_AVG_SIZE];            // Array to store readings
+    int readIndex = 0;                        // Current position in array
+    int movingAverage = 0;                    // Current moving average
+    
+    static const unsigned long CHECK_INTERVAL = 50; // Check every x ms
+    static const CHSV ORB_PRESENT_COLOR;           // Pure orange color in HSV
+    static const CHSV NO_ORB_COLOR;
 };
 
 #endif 
