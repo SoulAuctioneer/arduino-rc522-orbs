@@ -3,32 +3,35 @@
 const CHSV OrbDockHallSensor::ORB_PRESENT_COLOR = CHSV(32, 255, 255);
 const CHSV OrbDockHallSensor::NO_ORB_COLOR = CHSV(32, 255, 100);  // Golden color with lower value
 
-OrbDockHallSensor::OrbDockHallSensor(int hallSensorPin) : 
-    ledRing(HALL_LED_PATTERNS),
+OrbDockHallSensor::OrbDockHallSensor(DockType type, int hallSensorPin) : 
+    ledRing(type == NEST_DOCK ? NEST_LED_PATTERNS : POPCORN_LED_PATTERNS),
     hallSensorPin(hallSensorPin),
     isOrbPresent(false),
-    lastCheckTime(0)
+    lastCheckTime(0),
+    dockType(type)
 {
-    // OH49E Linear Hall Effect Sensor Wiring:
-    // - VCC → 5V
-    // - GND → GND
-    // - OUT → hallSensorPin (analog input)
+    // Constructor should only initialize member variables
 }
 
 void OrbDockHallSensor::begin() {
     ledRing.begin();
-    ledRing.setPattern(COLOR_CHASE);
+    ledRing.setPattern(PULSE);
     
-    // Initialize baseline by taking several readings
+    // Initialize moving average and set baseline
+    Serial.println("Reading hall sensor baseline values:");
     int sum = 0;
     for (int i = 0; i < MOVING_AVG_SIZE; i++) {
-        sum += analogRead(hallSensorPin);
         readings[i] = analogRead(hallSensorPin);
-        delay(10);  // Small delay between readings
+        sum += readings[i];
+        Serial.print("Reading ");
+        Serial.print(i);
+        Serial.print(": ");
+        Serial.println(readings[i]);
+        delay(10);
     }
     baselineValue = sum / MOVING_AVG_SIZE;
-    
-    Serial.print("Initial baseline value: ");
+    movingAverage = baselineValue;
+    Serial.print("Baseline value: ");
     Serial.println(baselineValue);
 }
 
@@ -38,47 +41,65 @@ void OrbDockHallSensor::loop() {
     if (currentMillis - lastCheckTime >= CHECK_INTERVAL) {
         lastCheckTime = currentMillis;
         
+        // Get new reading
         int hallValue = analogRead(hallSensorPin);
-        readings[readIndex] = hallValue;
         
-        int sum = 0;
+        // Update moving average
+        readings[readIndex] = hallValue;
+        readIndex = (readIndex + 1) % MOVING_AVG_SIZE;
+        
+        // Calculate average
+        long sum = 0;
         for (int i = 0; i < MOVING_AVG_SIZE; i++) {
             sum += readings[i];
         }
-        movingAverage = sum / MOVING_AVG_SIZE;
+        int newAverage = sum / MOVING_AVG_SIZE;
         
-        readIndex = (readIndex + 1) % MOVING_AVG_SIZE;
-
-        // Check for significant deviation from baseline
-        int deviation = movingAverage - baselineValue;
-        bool orbDetected = abs(deviation) > DETECTION_MARGIN;
-
-        Serial.print("Hall: ");
+        // Calculate change from baseline instead of previous average
+        int change = abs(newAverage - baselineValue);
+        
+        // Use appropriate detection margin
+        int detectionMargin = (dockType == POPCORN_DOCK) ? 
+                             POPCORN_DETECTION_MARGIN : 
+                             NEST_DETECTION_MARGIN;
+        
+        // Check if change exceeds threshold
+        bool orbDetected = (change > detectionMargin);
+        
+        Serial.print("Value: ");
         Serial.print(hallValue);
         Serial.print(" Avg: ");
         Serial.print(movingAverage);
-        Serial.print(" Base: ");
-        Serial.print(baselineValue);
-        Serial.print(" Deviation: ");
-        Serial.print(deviation);
-        Serial.print(" Orb detected: ");
+        Serial.print(" New Avg: ");
+        Serial.print(newAverage);
+        Serial.print(" Change: ");
+        Serial.print(change);
+        Serial.print(" Detected: ");
         Serial.println(orbDetected ? "true" : "false");
         
+        // Update state if changed
         if (orbDetected != isOrbPresent) {
             isOrbPresent = orbDetected;
             
+            // Update LED patterns
             if (isOrbPresent) {
                 ledRing.setPattern(SPARKLE_OUTWARD);
-                ledRing.queuePattern(COLOR_CHASE);
+                if (dockType == NEST_DOCK) {
+                    ledRing.queuePattern(COLOR_CHASE);
+                } else {
+                    ledRing.queuePattern(SPARKLE_OUTWARD);
+                }
             } else {
-                ledRing.setPattern(COLOR_CHASE);  // Changed from RAINBOW_IDLE
+                ledRing.setPattern(PULSE);
             }
         }
+        
+        // Update moving average
+        movingAverage = newAverage;
+        
+        // Update LED pattern
+        ledRing.update(isOrbPresent ? ORB_PRESENT_COLOR : NO_ORB_COLOR, 
+                      isOrbPresent ? 50 : 30,
+                      255);
     }
-    
-    // Update LED pattern with appropriate color and energy based on orb presence
-    ledRing.update(isOrbPresent ? ORB_PRESENT_COLOR : NO_ORB_COLOR, 
-                   isOrbPresent ? 50 : 1,  // Lower energy when no orb
-                   255  // Max value
-    );
 }

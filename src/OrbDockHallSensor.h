@@ -6,19 +6,37 @@
 #define HALL_SENSOR_PIN A0
 
 // Override LED pattern configurations for hall sensor version
-const LEDPatternConfig HALL_LED_PATTERNS[] = {
-    {RAINBOW_IDLE, 20, 20, 40},         // Dimmer, slower rainbow when no orb
-    {COLOR_CHASE, 250, 80, 40},         // Medium brightness, slower rotation when orb present
-    {TRANSITION_FLASH, 255, 10, 10},    // Keep flash the same
-    {ERROR, 255, 20, 20},              // Keep error the same
-    {LOW_ENERGY_PULSE, 100, 200, 10},   // Keep no energy the same
-    {SPARKLE, 180, 70, 20},             // Medium-high brightness, fast sparkle effect
-    {SPARKLE_OUTWARD, 180, 40, 20}      // Medium-high brightness, fast outward sparkle effect
+const LEDPatternConfig NEST_LED_PATTERNS[] = {
+    {RAINBOW_IDLE, 20, 30, 40},         // Gentle rainbow rotation
+    {COLOR_CHASE, 250, 120, 40},        // Fast, energetic chase
+    {TRANSITION_FLASH, 255, 200, 10},   // Very fast flash transition
+    {ERROR, 255, 80, 20},              // Clear error indication
+    {PULSE, 50, 10, 10},               // Smooth breathing pulse
+    {SPARKLE, 180, 160, 20},           // Quick sparkle effect
+    {SPARKLE_OUTWARD, 180, 140, 20}    // Fast outward sparkle expansion
+};
+
+// Popcorn patterns use max brightness
+const LEDPatternConfig POPCORN_LED_PATTERNS[] = {
+    {RAINBOW_IDLE, 255, 30, 40},       // Bright rainbow rotation
+    {COLOR_CHASE, 255, 120, 40},       // Bright chase
+    {TRANSITION_FLASH, 255, 200, 10},  // Bright flash transition
+    {ERROR, 255, 80, 20},             // Bright error indication
+    {PULSE, 255, 30, 10},             // Bright breathing pulse
+    {SPARKLE, 255, 160, 20},          // Bright sparkle effect
+    {SPARKLE_OUTWARD, 255, 140, 20}   // Bright outward sparkle expansion
+};
+
+// Add dock type enum before the class definition
+enum DockType {
+    NEST_DOCK,
+    POPCORN_DOCK
 };
 
 class OrbDockHallSensor {
 public:
-    OrbDockHallSensor(int hallSensorPin = HALL_SENSOR_PIN);
+    // Update constructor to accept dock type
+    OrbDockHallSensor(DockType type = NEST_DOCK, int hallSensorPin = HALL_SENSOR_PIN);
     void begin();
     void loop();
 
@@ -27,19 +45,20 @@ private:
     int hallSensorPin;
     bool isOrbPresent;
     unsigned long lastCheckTime;
+    DockType dockType;
     
-    // New moving average members
-    static const int MOVING_AVG_SIZE = 10;     // Reduced for responsiveness
-    static const int DETECTION_MARGIN = 30;    // Reduced from 50 to account for 3.3V range
+    // Simplified detection settings
+    static const int MOVING_AVG_SIZE = 10;
+    static const int NEST_DETECTION_MARGIN = 30;     
+    static const int POPCORN_DETECTION_MARGIN = 10;  
     
-    int baselineValue;  // Will be set during initialization
-    bool isBaselineSet = false;  // Track if we've established baseline
-    int readings[MOVING_AVG_SIZE];            // Array to store readings
-    int readIndex = 0;                        // Current position in array
-    int movingAverage = 0;                    // Current moving average
+    int readings[MOVING_AVG_SIZE];            
+    int readIndex = 0;                        
+    int movingAverage = 0;                    
+    int baselineValue = 0;                    // Add baseline value
     
-    static const unsigned long CHECK_INTERVAL = 50; // Check every x ms
-    static const CHSV ORB_PRESENT_COLOR;           // Pure orange color in HSV
+    static const unsigned long CHECK_INTERVAL = 50; 
+    static const CHSV ORB_PRESENT_COLOR;           
     static const CHSV NO_ORB_COLOR;
 };
 
