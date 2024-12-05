@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <EEPROM.h>
 #include "OrbDockHallSensor.h"
+#include "FairyLights.h"
 
 // EEPROM address to store dock type
 const int DOCK_TYPE_ADDRESS = 0;
@@ -24,8 +25,9 @@ DockType readDockType() {
     return (DockType)EEPROM.read(DOCK_TYPE_ADDRESS + 1);
 }
 
-// Initialize the dock with the type from EEPROM
-OrbDockHallSensor orbDock{readDockType(), A0};
+// Initialize objects
+FairyLights fairyLights;
+OrbDockHallSensor orbDock{readDockType(), A0, &fairyLights};  // Pass fairyLights pointer
 
 void setup() {
     Serial.begin(115200);
@@ -40,8 +42,17 @@ void setup() {
     Serial.println("Starting OrbDock");
     orbDock.begin();
     Serial.println("OrbDock started");
+
+    // Only initialize fairy lights for popcorn dock
+    if (readDockType() == POPCORN_DOCK) {
+        fairyLights.begin();
+    }
 }
 
 void loop() {
     orbDock.loop();
+    // Only update fairy lights for popcorn dock
+    if (readDockType() == POPCORN_DOCK) {
+        fairyLights.update();
+    }
 }

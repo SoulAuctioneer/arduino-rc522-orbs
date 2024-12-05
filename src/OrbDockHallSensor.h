@@ -2,6 +2,7 @@
 #define ORB_DOCK_HALL_SENSOR_H
 
 #include "LEDRing.h"
+#include "FairyLights.h"
 
 #define HALL_SENSOR_PIN A0
 #define ORB_PRESENT_PIN 2  // Digital pin D2
@@ -37,7 +38,7 @@ enum DockType {
 class OrbDockHallSensor {
 public:
     // Update constructor to accept dock type
-    OrbDockHallSensor(DockType type = NEST_DOCK, int hallSensorPin = HALL_SENSOR_PIN);
+    OrbDockHallSensor(DockType type = NEST_DOCK, int hallSensorPin = HALL_SENSOR_PIN, FairyLights* fairyLights = nullptr);
     void begin();
     void loop();
 
@@ -47,6 +48,7 @@ private:
     bool isOrbPresent;
     unsigned long lastCheckTime;
     DockType dockType;
+    FairyLights* fairyLights;
     
     // Detection settings
     static const int MOVING_AVG_SIZE = 5;        // Small window for current readings

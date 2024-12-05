@@ -31,8 +31,8 @@ const LEDPatternConfig LED_PATTERNS[] = {
     {COLOR_CHASE, 255, 4, 20},         // Medium speed chase
     {TRANSITION_FLASH, 255, 12, 10},   // Fast flash
     {ERROR, 255, 3, 20},              // Slow error transition
-    {PULSE, 100, 1, 10},              // Very slow pulse
-    {SPARKLE, 255, 160, 20},          // Quick sparkle effect - increased speed to match hall sensor
+    {PULSE, 100, 1, 10},              // Very slow pulse - using integer value
+    {SPARKLE, 255, 160, 20},          // Quick sparkle effect
     {SPARKLE_OUTWARD, 255, 140, 20}   // Fast outward sparkle expansion
 };
 

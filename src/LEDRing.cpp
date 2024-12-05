@@ -252,29 +252,15 @@ void LEDRing::sparkle() {
 }
 
 void LEDRing::pulse(CHSV color, uint8_t energy, uint8_t maxEnergy, float progress) {
-    // Scale down the progress to make the animation slower
-    progress = progress * 0.5f;  // Slow down the animation
-    
-    // Use smoother easing function instead of raw sine
-    float sinValue = sin(progress * 2 * PI);  
-    
-    // Apply double easing to make transitions even smoother
-    float easedValue = (sinValue + 1.0f) / 2.0f;  // Convert -1,1 to 0,1 range
-    
-    // Apply quadratic easing instead of cubic for less lingering at peaks
-    easedValue = easedValue * easedValue * (3 - 2 * easedValue);
-    
-    // Map to a much more subtle brightness range
-    uint8_t intensity = map(easedValue * 255, 0, 255, 20, 140);
+    // Use beatsin8 for smooth sine wave oscillation
+    uint8_t brightness = beatsin8(6, 40, 120);  // 6 BPM = very slow pulse
     
     // Create temporary HSV color with modified value
     CHSV adjustedColor = color;
-    adjustedColor.val = intensity;
+    adjustedColor.val = brightness;
     
-    // Convert to RGB and fill strip
-    CRGB rgbColor;
-    hsv2rgb_rainbow(adjustedColor, rgbColor);
-    fill_solid(leds, NEOPIXEL_COUNT, rgbColor);
+    // Fill strip with adjusted color
+    fill_solid(leds, NEOPIXEL_COUNT, adjustedColor);
 }
 
 void LEDRing::error() {

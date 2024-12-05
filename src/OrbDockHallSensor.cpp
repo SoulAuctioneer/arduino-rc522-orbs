@@ -3,12 +3,13 @@
 const CHSV OrbDockHallSensor::ORB_PRESENT_COLOR = CHSV(32, 255, 255);
 const CHSV OrbDockHallSensor::NO_ORB_COLOR = CHSV(32, 255, 100);  // Golden color with lower value
 
-OrbDockHallSensor::OrbDockHallSensor(DockType type, int hallSensorPin) : 
+OrbDockHallSensor::OrbDockHallSensor(DockType type, int hallSensorPin, FairyLights* fairyLights) : 
     ledRing(type == NEST_DOCK ? NEST_LED_PATTERNS : POPCORN_LED_PATTERNS),
     hallSensorPin(hallSensorPin),
     isOrbPresent(false),
     lastCheckTime(0),
-    dockType(type)
+    dockType(type),
+    fairyLights(fairyLights)
 {
     // Constructor should only initialize member variables
 }
@@ -42,6 +43,7 @@ void OrbDockHallSensor::begin() {
 void OrbDockHallSensor::loop() {
     unsigned long currentMillis = millis();
     
+    // Check hall sensor at slower interval
     if (currentMillis - lastCheckTime >= CHECK_INTERVAL) {
         lastCheckTime = currentMillis;
         
@@ -81,6 +83,11 @@ void OrbDockHallSensor::loop() {
             // Add this line to control D2
             digitalWrite(ORB_PRESENT_PIN, isOrbPresent ? HIGH : LOW);
             
+            // Trigger fairy lights if this is a popcorn dock and an orb was just detected
+            if (dockType == POPCORN_DOCK && fairyLights != nullptr) {
+                fairyLights->setActive(isOrbPresent);
+            }
+            
             // Update LED patterns
             if (isOrbPresent) {
                 ledRing.setPattern(SPARKLE_OUTWARD);
@@ -89,10 +96,10 @@ void OrbDockHallSensor::loop() {
                 ledRing.setPattern(PULSE);
             }
         }
-        
-        // Update LED pattern
-        ledRing.update(isOrbPresent ? ORB_PRESENT_COLOR : NO_ORB_COLOR, 
-                      isOrbPresent ? 50 : 30,
-                      255);
     }
+    
+    // Update LEDs at faster interval (independent of sensor checks)
+    ledRing.update(isOrbPresent ? ORB_PRESENT_COLOR : NO_ORB_COLOR, 
+                  isOrbPresent ? 50 : 30,
+                  255);
 }
