@@ -4,7 +4,7 @@
 #include <FastLED.h>
 
 #define FAIRY_LIGHTS_PIN 9
-#define FAIRY_LIGHTS_COUNT 50
+#define FAIRY_LIGHTS_COUNT 100
 #define ACTIVE_DURATION 8000  // 8 seconds in milliseconds
 
 class FairyLights {

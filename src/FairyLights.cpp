@@ -9,12 +9,12 @@ FairyLights::FairyLights() :
 }
 
 void FairyLights::begin() {
-    FastLED.addLeds<WS2812B, FAIRY_LIGHTS_PIN, GRB>(leds, FAIRY_LIGHTS_COUNT);
+    FastLED.addLeds<WS2812B, FAIRY_LIGHTS_PIN, RGB>(leds, FAIRY_LIGHTS_COUNT).setCorrection(TypicalLEDStrip);
     FastLED.setBrightness(IDLE_BRIGHTNESS);
     
     // Initialize all LEDs to warm yellow
     for (int i = 0; i < FAIRY_LIGHTS_COUNT; i++) {
-        leds[i] = CHSV(32, 255, 255);  // Warm yellow in HSV
+        leds[i] = CRGB(255, 128, 0);  // Red=255, Green=128, Blue=0 for warm yellow
     }
     FastLED.show();
 }
@@ -50,13 +50,12 @@ void FairyLights::update() {
 }
 
 void FairyLights::updateIdle() {
-    // Slowly rotate warm yellow hues
-    hue = (hue + IDLE_SPEED) % 255;
+    // Use beatsin8 for smooth brightness pulsing (min, max, beats-per-minute, offset)
+    uint8_t brightness = beatsin8(15, 96, 255, 0, 0);  // 15 BPM (faster), range 96-255 (stronger contrast)
     
     for (int i = 0; i < FAIRY_LIGHTS_COUNT; i++) {
-        // Create subtle variation in the warm yellow
-        uint8_t pixelHue = 32 + sin8(i * 4 + hue) / 8;  // Vary around hue 32 (yellow)
-        leds[i] = CHSV(pixelHue, 255, 255);
+        // Using CRGB with scaled warm yellow values based on current brightness
+        leds[i] = CRGB(brightness, brightness/2, 0);  // GRB order: Green=brightness/2, Red=brightness, Blue=0
     }
 }
 
@@ -65,8 +64,9 @@ void FairyLights::updateActive() {
     hue = (hue + ACTIVE_SPEED) % 255;
     
     for (int i = 0; i < FAIRY_LIGHTS_COUNT; i++) {
-        // Create rainbow pattern that moves through the strip
-        uint8_t pixelHue = hue + (i * 255 / FAIRY_LIGHTS_COUNT);
-        leds[i] = CHSV(pixelHue, 255, 255);
+        // Use fill_rainbow which handles color conversion correctly
+        leds[i] = CHSV(hue + (i * 255 / FAIRY_LIGHTS_COUNT), 255, 255);
+        // Convert CHSV to CRGB using FastLED's color correction
+        hsv2rgb_rainbow(CHSV(hue + (i * 255 / FAIRY_LIGHTS_COUNT), 255, 255), leds[i]);
     }
 } 
