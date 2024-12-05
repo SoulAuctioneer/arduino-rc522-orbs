@@ -15,7 +15,8 @@ enum LEDPatternId {
     ERROR,
     PULSE,
     SPARKLE,
-    SPARKLE_OUTWARD
+    SPARKLE_OUTWARD,
+    WARM_GOLD_ROTATE
 };
 
 struct LEDPatternConfig {
@@ -33,7 +34,8 @@ const LEDPatternConfig LED_PATTERNS[] = {
     {ERROR, 255, 3, 20},              // Slow error transition
     {PULSE, 100, 1, 10},              // Very slow pulse - using integer value
     {SPARKLE, 255, 160, 20},          // Quick sparkle effect
-    {SPARKLE_OUTWARD, 255, 140, 20}   // Fast outward sparkle expansion
+    {SPARKLE_OUTWARD, 255, 140, 20},   // Fast outward sparkle expansion
+    {WARM_GOLD_ROTATE, 255, 100, 20}   // Warm gold rotate
 };
 
 class LEDRing {
@@ -64,6 +66,7 @@ private:
     void sparkleOutward(CHSV color, uint8_t energy, uint8_t maxEnergy, float progress);
     void pulse(CHSV color, uint8_t energy, uint8_t maxEnergy, float progress);
     void error();
+    void warmGoldRotate(float progress);
     
     float lerp(float start, float end, float t);
 };

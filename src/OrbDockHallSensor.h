@@ -15,7 +15,8 @@ const LEDPatternConfig NEST_LED_PATTERNS[] = {
     {ERROR, 255, 80, 20},              // Clear error indication
     {PULSE, 50, 10, 10},               // Smooth breathing pulse
     {SPARKLE, 180, 160, 20},           // Quick sparkle effect
-    {SPARKLE_OUTWARD, 180, 140, 20}    // Fast outward sparkle expansion
+    {SPARKLE_OUTWARD, 180, 140, 20},    // Fast outward sparkle expansion
+    {WARM_GOLD_ROTATE, 100, 5, 20}    // Very slow rotation (5), moderate brightness
 };
 
 // Popcorn patterns use max brightness
@@ -26,7 +27,8 @@ const LEDPatternConfig POPCORN_LED_PATTERNS[] = {
     {ERROR, 255, 80, 20},             // Bright error indication
     {PULSE, 255, 30, 10},             // Bright breathing pulse
     {SPARKLE, 255, 160, 20},          // Bright sparkle effect
-    {SPARKLE_OUTWARD, 255, 140, 20}   // Bright outward sparkle expansion
+    {SPARKLE_OUTWARD, 255, 140, 20},   // Bright outward sparkle expansion
+    {WARM_GOLD_ROTATE, 255, 5, 20}    // Same but with full brightness for popcorn
 };
 
 // Add dock type enum before the class definition

@@ -19,7 +19,7 @@ void OrbDockHallSensor::begin() {
     digitalWrite(ORB_PRESENT_PIN, LOW);  // Initialize as LOW (no orb)
     
     ledRing.begin();
-    ledRing.setPattern(PULSE);
+    ledRing.setPattern(WARM_GOLD_ROTATE);
     
     // Calibrate baseline with more samples
     Serial.println("Calibrating baseline...");
@@ -93,7 +93,7 @@ void OrbDockHallSensor::loop() {
                 ledRing.setPattern(SPARKLE_OUTWARD);
                 ledRing.queuePattern(COLOR_CHASE);
             } else {
-                ledRing.setPattern(PULSE);
+                ledRing.setPattern(WARM_GOLD_ROTATE);
             }
         }
     }

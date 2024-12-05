@@ -1,6 +1,8 @@
 #include "LEDRing.h"
 #include <FastLED.h>
 
+#define DEBUG_BRIGHTNESS 0  // Set to 0 to disable brightness debugging
+
 LEDRing::LEDRing(const LEDPatternConfig* customPatterns) : 
     patterns(customPatterns),
     nextPatternId(RAINBOW_IDLE),
@@ -19,6 +21,16 @@ void LEDRing::begin() {
 }
 
 void LEDRing::setPattern(LEDPatternId patternId) {
+    #if DEBUG_BRIGHTNESS
+    Serial.print("Pattern Change: ");
+    Serial.print(getPatternName(ledPatternConfig.id));
+    Serial.print(" -> ");
+    Serial.print(getPatternName(patternId));
+    Serial.print(" (BR: ");
+    Serial.print(patterns[static_cast<int>(patternId)].brightness);
+    Serial.println(")");
+    #endif
+    
     ledPatternConfig = patterns[static_cast<int>(patternId)];
     isNewPattern = true;
 }
@@ -40,6 +52,24 @@ void LEDRing::update(CHSV color, uint8_t energy, uint8_t maxEnergy) {
     
     // Only update if enough time has passed
     if (currentMillis - lastUpdateTime >= LED_UPDATE_INTERVAL) {
+        #if DEBUG_BRIGHTNESS
+        static unsigned long lastBrightnessChange = 0;
+        static uint8_t lastBrightness = 0;
+        
+        // Track time between brightness changes
+        if (lastBrightness != ledPatternConfig.brightness) {
+            Serial.print("Brightness change after: ");
+            Serial.print(currentMillis - lastBrightnessChange);
+            Serial.print("ms, Value: ");
+            Serial.print(lastBrightness);
+            Serial.print(" -> ");
+            Serial.println(ledPatternConfig.brightness);
+            
+            lastBrightnessChange = currentMillis;
+            lastBrightness = ledPatternConfig.brightness;
+        }
+        #endif
+
         float deltaTime = (currentMillis - lastUpdateTime) / 1000.0f;  // Time in seconds
         lastUpdateTime = currentMillis;
 
@@ -49,7 +79,7 @@ void LEDRing::update(CHSV color, uint8_t energy, uint8_t maxEnergy) {
         if (animationProgress >= 1.0f) {
             animationProgress = 0.0f;
         }
-
+        
         // Update pattern based on current progress
         switch (ledPatternConfig.id) {
             case LEDPatternId::RAINBOW_IDLE:
@@ -73,12 +103,29 @@ void LEDRing::update(CHSV color, uint8_t energy, uint8_t maxEnergy) {
             case LEDPatternId::SPARKLE_OUTWARD:
                 sparkleOutward(color, energy, maxEnergy, animationProgress);
                 break;
+            case LEDPatternId::WARM_GOLD_ROTATE:
+                warmGoldRotate(animationProgress);
+                break;
             default:
                 break;
         }
 
         FastLED.setBrightness(ledPatternConfig.brightness);
         FastLED.show();
+        
+        // Debug actual LED values periodically
+        #if DEBUG_BRIGHTNESS
+        static unsigned long lastDebugTime = 0;
+        if (currentMillis - lastDebugTime > 1000) {  // Debug every second
+            lastDebugTime = currentMillis;
+            Serial.print("LED Values [0,8,16]: ");
+            Serial.print(leds[0].getAverageLight());
+            Serial.print(", ");
+            Serial.print(leds[8].getAverageLight());
+            Serial.print(", ");
+            Serial.println(leds[16].getAverageLight());
+        }
+        #endif
     }
 }
 
@@ -252,8 +299,29 @@ void LEDRing::sparkle() {
 }
 
 void LEDRing::pulse(CHSV color, uint8_t energy, uint8_t maxEnergy, float progress) {
-    // Use beatsin8 for smooth sine wave oscillation
-    uint8_t brightness = beatsin8(6, 40, 120);  // 6 BPM = very slow pulse
+    static uint8_t lastBrightness = 0;
+    
+    // Increase minimum brightness and reduce range for more stability
+    // Change from (6, 40, 120) to (4, 80, 160)
+    uint8_t rawBrightness = beatsin8(4, 80, 160);  // 4 BPM = slower, gentler pulse
+    
+    // Smooth the brightness changes by only updating when change is significant
+    uint8_t brightness = rawBrightness;
+    if (abs(brightness - lastBrightness) < 3) {
+        brightness = lastBrightness;  // Ignore tiny changes
+    }
+    
+    #if DEBUG_BRIGHTNESS
+    if (brightness != lastBrightness) {
+        Serial.print("Pulse brightness: ");
+        Serial.print(lastBrightness);
+        Serial.print(" -> ");
+        Serial.print(brightness);
+        Serial.print(" at ");
+        Serial.println(millis());
+        lastBrightness = brightness;
+    }
+    #endif
     
     // Create temporary HSV color with modified value
     CHSV adjustedColor = color;
@@ -307,6 +375,7 @@ const char* LEDRing::getPatternName(LEDPatternId id) {
         case LEDPatternId::PULSE: return "PULSE";
         case LEDPatternId::SPARKLE: return "SPARKLE";
         case LEDPatternId::SPARKLE_OUTWARD: return "SPARKLE_OUTWARD";
+        case LEDPatternId::WARM_GOLD_ROTATE: return "WARM_GOLD_ROTATE";
         default: return "UNKNOWN";
     }
 }
@@ -393,6 +462,38 @@ void LEDRing::sparkleOutward(CHSV color, uint8_t energy, uint8_t maxEnergy, floa
             leds[i].nscale8(ledPatternConfig.brightness);
         }
         cycleComplete = true;
+    }
+}
+
+void LEDRing::warmGoldRotate(float progress) {
+    static const CHSV WARM_GOLD = CHSV(32, 255, 100);  // Warm gold color
+    static const uint8_t TRAIL_LENGTH = NEOPIXEL_COUNT;  // Use full ring for trail
+    static const uint8_t PEAK_BRIGHTNESS = 100;  // Maximum brightness
+    static const uint8_t MIN_BRIGHTNESS = 5;    // Lower minimum for smoother fade
+    
+    // Calculate current position with higher precision
+    float currentPosF = progress * NEOPIXEL_COUNT;
+    uint8_t currentPos = currentPosF;
+    
+    // Create the trail effect
+    for (int i = 0; i < NEOPIXEL_COUNT; i++) {
+        // Calculate angular distance to current position
+        float distanceF = abs(i - currentPosF);
+        if (distanceF > NEOPIXEL_COUNT/2) {
+            distanceF = NEOPIXEL_COUNT - distanceF;
+        }
+        
+        // Use sine wave for smooth brightness falloff
+        float normalizedDist = distanceF / (NEOPIXEL_COUNT/2);
+        float fadeRatio = cos(normalizedDist * PI) * 0.5 + 0.5;
+        
+        // Calculate brightness using smooth curve
+        uint8_t brightness = lerp(MIN_BRIGHTNESS, PEAK_BRIGHTNESS, fadeRatio * fadeRatio);
+        
+        // Set colors with fading brightness
+        CHSV adjustedColor = WARM_GOLD;
+        adjustedColor.val = brightness;
+        leds[i] = adjustedColor;
     }
 }
 
