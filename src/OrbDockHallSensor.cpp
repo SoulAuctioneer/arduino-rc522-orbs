@@ -14,23 +14,27 @@ OrbDockHallSensor::OrbDockHallSensor(DockType type, int hallSensorPin) :
 }
 
 void OrbDockHallSensor::begin() {
+    pinMode(ORB_PRESENT_PIN, OUTPUT);
+    digitalWrite(ORB_PRESENT_PIN, LOW);  // Initialize as LOW (no orb)
+    
     ledRing.begin();
     ledRing.setPattern(PULSE);
     
-    // Initialize moving average and set baseline
-    Serial.println("Reading hall sensor baseline values:");
-    int sum = 0;
-    for (int i = 0; i < MOVING_AVG_SIZE; i++) {
-        readings[i] = analogRead(hallSensorPin);
-        sum += readings[i];
-        Serial.print("Reading ");
-        Serial.print(i);
-        Serial.print(": ");
-        Serial.println(readings[i]);
+    // Calibrate baseline with more samples
+    Serial.println("Calibrating baseline...");
+    long sum = 0;
+    for (int i = 0; i < CALIBRATION_SAMPLES; i++) {
+        sum += analogRead(hallSensorPin);
         delay(10);
     }
-    baselineValue = sum / MOVING_AVG_SIZE;
+    baselineValue = sum / CALIBRATION_SAMPLES;
+    
+    // Initialize moving average buffer with baseline
+    for (int i = 0; i < MOVING_AVG_SIZE; i++) {
+        readings[i] = baselineValue;
+    }
     movingAverage = baselineValue;
+    
     Serial.print("Baseline value: ");
     Serial.println(baselineValue);
 }
@@ -41,22 +45,15 @@ void OrbDockHallSensor::loop() {
     if (currentMillis - lastCheckTime >= CHECK_INTERVAL) {
         lastCheckTime = currentMillis;
         
-        // Get new reading
+        // Get new reading and update moving average
         int hallValue = analogRead(hallSensorPin);
-        
-        // Update moving average
+        movingAverage -= readings[readIndex] / MOVING_AVG_SIZE;
         readings[readIndex] = hallValue;
+        movingAverage += hallValue / MOVING_AVG_SIZE;
         readIndex = (readIndex + 1) % MOVING_AVG_SIZE;
         
-        // Calculate average
-        long sum = 0;
-        for (int i = 0; i < MOVING_AVG_SIZE; i++) {
-            sum += readings[i];
-        }
-        int newAverage = sum / MOVING_AVG_SIZE;
-        
-        // Calculate change from baseline instead of previous average
-        int change = abs(newAverage - baselineValue);
+        // Compare moving average to baseline
+        int change = abs(movingAverage - baselineValue);
         
         // Use appropriate detection margin
         int detectionMargin = (dockType == POPCORN_DOCK) ? 
@@ -68,10 +65,10 @@ void OrbDockHallSensor::loop() {
         
         Serial.print("Value: ");
         Serial.print(hallValue);
-        Serial.print(" Avg: ");
+        Serial.print(" MovAvg: ");
         Serial.print(movingAverage);
-        Serial.print(" New Avg: ");
-        Serial.print(newAverage);
+        Serial.print(" Baseline: ");
+        Serial.print(baselineValue);
         Serial.print(" Change: ");
         Serial.print(change);
         Serial.print(" Detected: ");
@@ -81,21 +78,17 @@ void OrbDockHallSensor::loop() {
         if (orbDetected != isOrbPresent) {
             isOrbPresent = orbDetected;
             
+            // Add this line to control D2
+            digitalWrite(ORB_PRESENT_PIN, isOrbPresent ? HIGH : LOW);
+            
             // Update LED patterns
             if (isOrbPresent) {
                 ledRing.setPattern(SPARKLE_OUTWARD);
-                if (dockType == NEST_DOCK) {
-                    ledRing.queuePattern(COLOR_CHASE);
-                } else {
-                    ledRing.queuePattern(SPARKLE_OUTWARD);
-                }
+                ledRing.queuePattern(COLOR_CHASE);
             } else {
                 ledRing.setPattern(PULSE);
             }
         }
-        
-        // Update moving average
-        movingAverage = newAverage;
         
         // Update LED pattern
         ledRing.update(isOrbPresent ? ORB_PRESENT_COLOR : NO_ORB_COLOR, 

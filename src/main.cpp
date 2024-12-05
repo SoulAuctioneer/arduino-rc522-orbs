@@ -1,27 +1,42 @@
 #include <Arduino.h>
-
-//#include "OrbDockConfigurizer.cpp"
-//OrbDockConfigurizer orbDock{};
-
-//#include "OrbDockBasic.cpp"
-//OrbDockBasic orbDock{};
-
-//#include "OrbDockCasino.cpp"
-//OrbDockCasino orbDock{};
-
-//#include "OrbDockComms.h"
-//OrbDockComms orbDock(10, 11, 9, 13);
-
-//#include "OrbDockLedDistiller.cpp"
-//OrbDockLedDistiller orbDock{};
-
+#include <EEPROM.h>
 #include "OrbDockHallSensor.h"
-//OrbDockHallSensor orbDock{POPCORN_DOCK};
-OrbDockHallSensor orbDock{NEST_DOCK};
+
+// EEPROM address to store dock type
+const int DOCK_TYPE_ADDRESS = 0;
+const uint8_t DOCK_TYPE_MARKER = 0xAA;  // Marker to check if value was set
+
+// Function to write dock type to EEPROM
+void writeDockType(DockType type) {
+    EEPROM.write(DOCK_TYPE_ADDRESS, DOCK_TYPE_MARKER);
+    EEPROM.write(DOCK_TYPE_ADDRESS + 1, type);
+}
+
+// Function to read dock type from EEPROM
+DockType readDockType() {
+    // Check if dock type was ever set
+    if (EEPROM.read(DOCK_TYPE_ADDRESS) != DOCK_TYPE_MARKER) {
+        // If not set, default to NEST_DOCK
+        return NEST_DOCK;
+    }
+    
+    // Read the stored dock type
+    return (DockType)EEPROM.read(DOCK_TYPE_ADDRESS + 1);
+}
+
+// Initialize the dock with the type from EEPROM
+OrbDockHallSensor orbDock{readDockType(), A0};
 
 void setup() {
     Serial.begin(115200);
     while (!Serial) delay(10);
+    
+    // Uncomment and upload once to set dock type, then comment out and upload again
+    // writeDockType(NEST_DOCK);  // or NEST_DOCK
+    
+    Serial.print("Dock Type: ");
+    Serial.println(readDockType() == POPCORN_DOCK ? "POPCORN" : "NEST");
+    
     Serial.println("Starting OrbDock");
     orbDock.begin();
     Serial.println("OrbDock started");

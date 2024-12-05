@@ -4,6 +4,7 @@
 #include "LEDRing.h"
 
 #define HALL_SENSOR_PIN A0
+#define ORB_PRESENT_PIN 2  // Digital pin D2
 
 // Override LED pattern configurations for hall sensor version
 const LEDPatternConfig NEST_LED_PATTERNS[] = {
@@ -47,19 +48,22 @@ private:
     unsigned long lastCheckTime;
     DockType dockType;
     
-    // Simplified detection settings
-    static const int MOVING_AVG_SIZE = 10;
-    static const int NEST_DETECTION_MARGIN = 30;     
-    static const int POPCORN_DETECTION_MARGIN = 10;  
+    // Detection settings
+    static const int MOVING_AVG_SIZE = 5;        // Small window for current readings
+    static const int CALIBRATION_SAMPLES = 30;   // More samples for stable baseline
+    static const int NEST_DETECTION_MARGIN = 20;     
+    static const int POPCORN_DETECTION_MARGIN = 8;  
     
     int readings[MOVING_AVG_SIZE];            
     int readIndex = 0;                        
     int movingAverage = 0;                    
-    int baselineValue = 0;                    // Add baseline value
+    int baselineValue = 0;                    
     
+    int lastReading;                    // Store previous reading
     static const unsigned long CHECK_INTERVAL = 50; 
     static const CHSV ORB_PRESENT_COLOR;           
     static const CHSV NO_ORB_COLOR;
+    bool isPopcornDock();
 };
 
 #endif 
