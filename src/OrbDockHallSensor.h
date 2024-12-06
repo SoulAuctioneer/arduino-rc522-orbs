@@ -47,27 +47,20 @@ public:
 private:
     LEDRing ledRing;
     int hallSensorPin;
-    bool isOrbPresent;
+    bool isOrbPresent = false;
     unsigned long lastCheckTime;
     DockType dockType;
     FairyLights* fairyLights;
     
     // Detection settings
-    static const int MOVING_AVG_SIZE = 5;        // Small window for current readings
-    static const int CALIBRATION_SAMPLES = 30;   // More samples for stable baseline
-    static const int NEST_DETECTION_MARGIN = 20;     
-    static const int POPCORN_DETECTION_MARGIN = 8;  
+    static const int CALIBRATION_SAMPLES = 5;     // Samples for initial baseline
+    static const int NEST_DETECTION_MARGIN = 30;  // Detection threshold
+    static const int POPCORN_DETECTION_MARGIN = 15;  // Detection threshold for popcorn
     
-    int readings[MOVING_AVG_SIZE];            
-    int readIndex = 0;                        
-    int movingAverage = 0;                    
     int baselineValue = 0;                    
-    
-    int lastReading;                    // Store previous reading
-    static const unsigned long CHECK_INTERVAL = 50; 
+    static const unsigned long CHECK_INTERVAL = 75; 
     static const CHSV ORB_PRESENT_COLOR;           
     static const CHSV NO_ORB_COLOR;
-    bool isPopcornDock();
 };
 
 #endif 
